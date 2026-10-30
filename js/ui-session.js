@@ -37,7 +37,7 @@ function enterModule(S, i) {
 }
 UI.startSession = cfg => {
   const p = prof();
-  if (p.session && !cfg.force) { /* replace silently — caller confirmed */ }
+  if (p.session && !cfg.force) { /* replace silently, caller confirmed */ }
   const S = { id: U.uid(), mode: cfg.mode, kind: cfg.kind || 'set', title: cfg.title, tutor: !!cfg.tutor, plan: cfg.plan, mods: [], mi: 0, qi: 0, phase: 'q', startedAt: Date.now(), used: [], route: {}, back: cfg.back || '/home' };
   p.session = S; enterModule(S, 0); Store.save(true); UI.go('/session');
 };
@@ -189,7 +189,7 @@ function questionScreen(S) {
   const topFig = !left && (q.table || q.fig) ? `<div class="inline-media">${passageHTML(q)}</div>` : '';
   const sk = SKILL_BY_ID[q.s];
   const fb = S.tutor && checked ? (() => { const ok = isOk(q, ans); return `<div class="feedback ${ok ? 'ok' : 'bad'}" role="status"><div class="fb-head">${ok ? ic('check', 20) + '<b>Correct</b>' : ic('x', 20) + '<b>Not quite</b>'}<span class="chips">${UI.badge(sk.name)}${UI.badge(['', 'Easy', 'Medium', 'Hard'][q.d], 'd' + q.d)}</span></div>
-      <p class="fb-exp">${fmt(q.e)}</p><div class="fb-tip">${ic('bulb', 18)}<p><b>Skill tip — ${U.esc(sk.name)}.</b> ${U.esc(sk.tip)}</p></div></div>`; })() : '';
+      <p class="fb-exp">${fmt(q.e)}</p><div class="fb-tip">${ic('bulb', 18)}<p><b>Skill tip: ${U.esc(sk.name)}.</b> ${U.esc(sk.tip)}</p></div></div>`; })() : '';
   const canCheck = answered(ans);
   const last = i === n - 1;
   const navBtn = `<button class="nav-q" data-act="sessNav" aria-haspopup="dialog"><span class="qw">Question </span>${i + 1} of ${n} ${ic('up', 16)}</button>`;
@@ -214,7 +214,7 @@ function introScreen(S) {
 }
 function breakScreen(S) {
   return `<div class="center-card"><div class="card tall tc"><span class="eyebrow">Break</span><h1>Take 10 minutes</h1><div class="bigtime" id="breaktime" role="timer">10:00</div>
-    <p class="hint">Stand up, stretch, drink some water. Math is next — the calculator and reference sheet will be available.</p>
+    <p class="hint">Stand up, stretch, drink some water. Math is next. The calculator and reference sheet will be available.</p>
     <div class="row c"><button class="btn btn-primary lg" data-act="sessEndBreak">Resume testing ${ic('arrow', 18)}</button></div></div></div>`;
 }
 UI.routes.session = () => {
@@ -356,7 +356,7 @@ UI.reviewItem = (x, idx) => {
     <div class="rv-body">${q.p ? `<div class="passage sm">${fmt(q.p)}</div>` : ''}${UI.tableHTML(q.table)}${q.fig ? `<div class="figure">${q.fig}</div>` : ''}<p class="prompt">${fmt(q.q)}</p>
     ${choicesHTML(q, { ans: x.a, locked: true, reveal: true, noElim: true })}
     ${!answered(x.a) ? `<p class="grid-note bad">${ic('alert', 16)} You did not answer this one.${q.grid ? ` Correct answer: <b>${U.esc(q.show || q.a)}</b>` : ''}</p>` : ''}
-    <div class="feedback ${x.ok ? 'ok' : 'bad'}"><p class="fb-exp">${fmt(q.e)}</p><div class="fb-tip">${ic('bulb', 18)}<p><b>Skill tip — ${U.esc(sk.name)}.</b> ${U.esc(sk.tip)}</p></div></div></div></details>`;
+    <div class="feedback ${x.ok ? 'ok' : 'bad'}"><p class="fb-exp">${fmt(q.e)}</p><div class="fb-tip">${ic('bulb', 18)}<p><b>Skill tip: ${U.esc(sk.name)}.</b> ${U.esc(sk.tip)}</p></div></div></div></details>`;
 };
 UI.routes.results = (id) => {
   const p = prof(), rec = p.tests.find(r => r.id === id);
@@ -371,7 +371,7 @@ UI.routes.results = (id) => {
       <div><b>${s.math.score}</b><span>Math</span><small>${s.math.c1}/${s.math.n1} then ${s.math.c2}/${s.math.n2} · ${s.math.hard ? 'harder' : 'easier'} 2nd module</small></div></div></div>`
     : (s.rw && !s.math) || (s.math && !s.rw) ? (() => { const x = s.rw || s.math; return `<div class="score-hero"><div><span class="eyebrow">Estimated section score</span><div class="score-big">${x.score}</div><small>out of 800 · ${x.hard ? 'second module was harder' : 'second module was easier'}</small></div></div>`; })()
     : `<div class="score-hero"><div><span class="eyebrow">${U.esc(rec.title)}</span><div class="score-big">${s.correct}<small class="of">/${s.n}</small></div><small>${U.pct(s.pct)} correct</small></div></div>`;
-  const nextSteps = worst.length ? worst.map(([k, v]) => `<div class="step"><div><b>${U.esc(SKILL_BY_ID[k].name)}</b><small>${v.ok}/${v.n} correct this session</small></div><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${k}">${ic('practice', 16)} Practice</button></div>`).join('') : `<p class="hint">No weak spots in this session — keep the streak going.</p>`;
+  const nextSteps = worst.length ? worst.map(([k, v]) => `<div class="step"><div><b>${U.esc(SKILL_BY_ID[k].name)}</b><small>${v.ok}/${v.n} correct this session</small></div><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${k}">${ic('practice', 16)} Practice</button></div>`).join('') : `<p class="hint">No weak spots in this session, keep the streak going.</p>`;
   const html = `<div class="page results">
     <div class="page-head"><div><span class="eyebrow">${UI.fmtDate(rec.t)} · ${Math.round(rec.took / 60000)} min</span><h1>${U.esc(rec.title)}${rec.mode === 'diag' ? ' results' : ''}</h1></div>
       <div class="row"><a class="btn btn-ghost" href="#/${rec.mode === 'test' ? 'tests' : rec.mode === 'diag' ? 'plan' : 'practice'}">${rec.mode === 'diag' ? 'See my study plan' : 'Done'}</a></div></div>

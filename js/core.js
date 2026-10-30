@@ -189,7 +189,7 @@ function analyze(prof) {
   const recent = prof.hist.slice(-120);
   if (recent.length >= 12) {
     const fast = recent.filter(h => h.ms && h.ms < 0.25 * TARGET_MS[SKILL_BY_ID[h.s].sec]);
-    if (fast.length >= 6 && fast.filter(h => !h.ok).length / fast.length > 0.5) notes.push({ k: 'rush', t: 'You are answering some questions very quickly and missing most of those. Slow down on the first read — underline the question’s ask before you look at choices.' });
+    if (fast.length >= 6 && fast.filter(h => !h.ok).length / fast.length > 0.5) notes.push({ k: 'rush', t: 'You are answering some questions very quickly and missing most of those. Slow down on the first read, underline the question’s ask before you look at choices.' });
     const easy = recent.filter(h => h.d === 1);
     if (easy.length >= 8 && easy.filter(h => h.ok).length / easy.length < 0.7) notes.push({ k: 'easy', t: 'You are missing too many easy questions. That usually means a few rules or formulas need review, not more hard practice. Open the Skill Guide for your focus areas.' });
     const slow = recent.filter(h => h.ms && h.ms > 1.8 * TARGET_MS[SKILL_BY_ID[h.s].sec]);
@@ -197,7 +197,7 @@ function analyze(prof) {
     const a = recent.slice(-30), b = recent.slice(-60, -30);
     if (a.length >= 20 && b.length >= 20) {
       const da = a.filter(h => h.ok).length / a.length, db = b.filter(h => h.ok).length / b.length;
-      if (da - db >= 0.1) notes.push({ k: 'up', t: `Nice — your accuracy is up ${Math.round((da - db) * 100)} points over your last 30 questions.` });
+      if (da - db >= 0.1) notes.push({ k: 'up', t: `Nice. Your accuracy is up ${Math.round((da - db) * 100)} points over your last 30 questions.` });
       else if (db - da >= 0.1) notes.push({ k: 'down', t: 'Accuracy dipped recently. If you are tired, take a break; otherwise revisit the explanations for missed questions.' });
     }
   }
