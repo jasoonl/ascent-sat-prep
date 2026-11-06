@@ -50,8 +50,9 @@ UI.routes.welcome = () => {
     <li>${ic('tests', 20)}<span>Full-length adaptive practice tests with the real format, timing and a built-in calculator.</span></li>
     <li>${ic('trophy', 20)}<span>Enter scores from real SAT and PSAT tests, and see how close you are to your goal and to National Merit.</span></li>
     <li>${ic('mistakes', 20)}<span>A mistake notebook brings missed questions back at the right time until they stick.</span></li></ul>
-    <p class="hint">Your progress is saved privately on this device. Nothing is sent anywhere.</p></div>
+    <p class="hint">${window.Cloud && Cloud.enabled ? 'Your progress is saved on this device. If you sign in, it is also saved to your account so it follows you between devices.' : 'Your progress is saved privately on this device. Nothing is sent anywhere.'}</p></div>
     <form class="card welcome-form" id="wform" novalidate><h2>${has ? 'Add a student' : 'Set up your profile'}</h2>
+      ${window.Cloud && Cloud.enabled ? (Cloud.user ? `<p class="hint" style="margin-top:-.25rem">Signed in as <b>${esc(Cloud.user.email)}</b>. Set up your profile to continue.</p>` : `<p class="hint" style="margin-top:-.25rem">Already have an account? <button type="button" class="link" data-act="acctOpen" data-arg="signin">Sign in</button></p>`) : ''}
       <div class="field"><label for="w-name">First name</label><input id="w-name" class="inp" required maxlength="24" autocomplete="given-name"><p class="err" id="w-err" role="alert" hidden>Please enter a name.</p></div>
       <div class="field"><label for="w-grade">Grade</label><select id="w-grade" class="inp"><option>9</option><option>10</option><option selected>11</option><option>12</option></select></div>
       <fieldset class="field"><legend>Which test are you preparing for?</legend><div class="seg" role="radiogroup">${[['sat', 'SAT'], ['psat', 'PSAT/NMSQT'], ['psat10', 'PSAT 10']].map(([k, l]) => `<label class="seg-i"><input type="radio" name="w-exam" value="${k}" data-ch="wExam" ${k === 'sat' ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div><p class="hint">The SAT is the main focus. Pick a PSAT to practice for National Merit. You can change this later.</p></fieldset>
@@ -71,6 +72,7 @@ UI.routes.welcome = () => {
       if (f.rw || f.math || f.total) { const v = Engine.validateScore(f); if (!v.ok) { $('#w-prior').open = true; showErrors('w', v.err); return; } prior = v.entry; }
       const p = Store.create({ name, grade: +$('#w-grade').value, exam: $('input[name="w-exam"]:checked').value, target: +$('#w-target').value, testDate: $('#w-testdate').value, dailyMin: +$('input[name="w-min"]:checked').value });
       if (prior) { p.prior.push(prior); Store.save(true); }
+      if (window.Cloud && Cloud.user && !Cloud.boundProfile()) Cloud.linkActive();
       UI.shellOn = false; UI.go('/home'); UI.render();
     });
   } };

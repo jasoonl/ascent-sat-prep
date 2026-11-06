@@ -308,3 +308,15 @@ body.focus .side, body.focus .top, body.focus .tabbar { display: none; } body.fo
 }
 @media (max-width: 480px) { .field .seg .seg-i { padding: 0 .1rem; font-size: .8rem; } }
 .tbl-wrap > table.list-table:not(.stack-table) { min-width: 480px; }
+
+/* ---------- accounts ---------- */
+.who.acct { margin-bottom: .25rem; } .who.acct .who-t { min-width: 0; } .who.acct b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-rel { position: relative; }
+.sync-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); display: inline-block; border: 2px solid var(--surface); box-sizing: content-box; }
+.icon-btn .sync-dot { position: absolute; right: 7px; bottom: 7px; }
+.sync-dot.synced { background: var(--success); } .sync-dot.syncing, .sync-dot.pending { background: var(--accent); } .sync-dot.offline, .sync-dot.error { background: var(--danger); }
+.pw-wrap { position: relative; } .pw-wrap .inp { padding-right: 52px; } .pw-toggle { position: absolute; right: 4px; top: 4px; }
+.ok-t { color: var(--success); font-weight: 600; margin: .5rem 0; }
+.tc { text-align: center; }
+
+.dialog .err { margin: .5rem 0 .75rem; } .dialog .ok-t { margin: .5rem 0 .75rem; }

@@ -143,7 +143,7 @@ UI.routes.mistakes = (a, p) => {
   return { html, title: 'Mistakes' };
 };
 UI.acts.mFilter = (k) => { UI.mistakeFilter = k; UI.render(); };
-UI.acts.mDelete = (id) => { delete prof().missed[id]; Store.save(true); UI.render(); };
+UI.acts.mDelete = (id) => { const p = prof(); delete p.missed[id]; (p.retired = p.retired || {})[id] = Date.now(); Store.save(true); UI.render(); };
 UI.acts.reviewAll = () => UI.confirmStart(() => UI.startReview(false));
 
 /* =================== PROGRESS =================== */
@@ -269,6 +269,7 @@ UI.routes.settings = (a, p) => {
         <div class="field"><label for="ai-s">Skill</label><select id="ai-s" class="inp">${SKILLS.map(k => `<option value="${k.id}">${esc(SEC_LABEL[k.sec])}: ${esc(k.name)}</option>`).join('')}</select></div>
         <div class="field"><label for="ai-n">How many</label><select id="ai-n" class="inp">${[3, 5, 8, 10].map(n => `<option ${n === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
         <div class="row"><button class="btn btn-primary" id="ai-go" data-act="aiGen">${ic('sparkles', 16)} Generate</button><span class="hint" id="ai-status" role="status"></span></div></details></section>
+    ${UI.accountCard ? UI.accountCard(p) : ''}
     <section class="card"><h2>Your data</h2><p class="sub">Progress lives in this browser. Download a backup to move to another device or keep it safe.</p>
       <div class="row wrap"><button class="btn btn-soft" data-act="exportAll">${ic('download', 16)} Download backup</button><label class="btn btn-ghost file-btn">${ic('upload', 16)} Restore backup<input type="file" accept="application/json,.json" data-ch="restoreFile" hidden></label></div>
       <hr><div class="row wrap"><button class="btn btn-danger-ghost" data-act="resetProfile">Reset ${esc(p.name)}’s progress</button><button class="btn btn-danger-ghost" data-act="deleteProfile">Delete this student</button></div></section>
