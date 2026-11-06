@@ -35,7 +35,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     }
   };
   await page.goto('http://localhost:8765/index.html'); await page.waitForSelector('#wform');
-  await page.fill('#w-name', 'Maya'); await page.fill('#w-date', '2027-03-13'); await page.click('#wform button[type=submit]');
+  await page.fill('#w-name', 'Maya'); await page.fill('#w-testdate', '2027-03-13'); await page.click('#wform button[type=submit]');
   await page.waitForSelector('.page-head h1');
   // diagnostic (quick)
   await page.click('[data-act="startDiag"][data-arg="1"]'); await page.waitForSelector('.sess');
