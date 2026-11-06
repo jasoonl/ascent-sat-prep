@@ -12,34 +12,7 @@ function countdownChip(p) {
   return `<span class="chip-stat ${d <= 14 ? 'hot' : ''}">${ic('plan', 16)}${d < 0 ? 'Test date passed' : d === 0 ? 'Test day!' : `${d} day${d === 1 ? '' : 's'} to test`}</span>`;
 }
 
-/* =================== WELCOME =================== */
-UI.routes.welcome = () => {
-  const s = Store.get(), has = Object.keys(s.profiles).length > 0;
-  const html = `<div class="welcome-wrap"><div class="welcome-hero"><div class="brand big">${ic('logo', 36)}<span>Ascent <small>SAT Prep</small></span></div>
-    <h1>Free SAT practice that finds what to work on next.</h1>
-    <ul class="bullets"><li>${ic('target', 20)}<span>A short diagnostic pinpoints weak skills across all 4 Reading &amp; Writing and 4 Math areas.</span></li>
-    <li>${ic('tests', 20)}<span>Full-length adaptive practice tests with the real format, timing and a built-in calculator.</span></li>
-    <li>${ic('mistakes', 20)}<span>A mistake notebook brings missed questions back at the right time until they stick.</span></li></ul>
-    <p class="hint">Your progress is saved privately on this device. Nothing is sent anywhere.</p></div>
-    <form class="card welcome-form" id="wform" novalidate><h2>${has ? 'Add a student' : 'Set up your profile'}</h2>
-      <div class="field"><label for="w-name">First name</label><input id="w-name" class="inp" required maxlength="24" autocomplete="given-name"><p class="err" id="w-err" role="alert" hidden>Please enter a name.</p></div>
-      <div class="field"><label for="w-grade">Grade</label><select id="w-grade" class="inp"><option>9</option><option>10</option><option selected>11</option><option>12</option></select></div>
-      <div class="field"><label for="w-target">Target total score: <output id="w-tout">1300</output></label><input id="w-target" type="range" min="800" max="1600" step="10" value="1300"><p class="hint">Out of 1600. You can change this any time.</p></div>
-      <div class="field"><label for="w-date">Test date <span class="opt">(optional)</span></label><input id="w-date" class="inp" type="date" min="${U.today()}"></div>
-      <fieldset class="field"><legend>Daily study time</legend><div class="seg" role="radiogroup">${[15, 30, 45, 60, 90].map(m => `<label class="seg-i"><input type="radio" name="w-min" value="${m}" ${m === 30 ? 'checked' : ''}><span>${m} min</span></label>`).join('')}</div></fieldset>
-      <button class="btn btn-primary lg block" type="submit">Create profile ${ic('arrow', 18)}</button>
-      ${has ? `<a class="btn btn-ghost block" href="#/home">Cancel</a>` : `<label class="btn btn-ghost block file-btn">${ic('upload', 18)} Restore from a backup file<input type="file" accept="application/json,.json" data-ch="restoreFile" hidden></label>`}
-    </form></div>`;
-  return { html, title: 'Welcome', after: () => {
-    $('#w-target').addEventListener('input', e => { $('#w-tout').textContent = e.target.value; });
-    $('#wform').addEventListener('submit', e => {
-      e.preventDefault(); const name = $('#w-name').value.trim();
-      if (!name) { $('#w-err').hidden = false; $('#w-name').setAttribute('aria-invalid', 'true'); $('#w-name').focus(); return; }
-      Store.create({ name, grade: +$('#w-grade').value, target: +$('#w-target').value, testDate: $('#w-date').value, dailyMin: +($('input[name="w-min"]:checked').value) });
-      UI.shellOn = false; UI.go('/home'); UI.render();
-    });
-  } };
-};
+/* Welcome / onboarding lives in ui-scores.js */
 UI.ins.restoreFile = (v, el) => {
   const f = el.files[0]; if (!f) return; const r = new FileReader();
   r.onload = () => { try { Store.importAll(r.result); UI.toast('Backup restored.', 'ok'); UI.shellOn = false; UI.go('/home'); UI.render(); } catch (e) { UI.toast(e.message || 'That file could not be read.', 'warn'); } };
@@ -48,24 +21,29 @@ UI.ins.restoreFile = (v, el) => {
 
 /* =================== HOME =================== */
 UI.routes.home = (a, p) => {
-  const est = Engine.estimate(p), an = Engine.analyze(p), st = Engine.streak(p), td = Engine.todayStats(p), due = Engine.dueMissed(p).length;
+  const est = Engine.estimate(p), an = Engine.analyze(p), st = Engine.streak(p), td = Engine.todayStats(p), due = Engine.dueMissed(p).length, sc = Engine.examOf(p), lvl = Engine.currentLevel(p), E = Engine.EXAMS;
   const goalMin = p.dailyMin, doneMin = Math.round(td.ms / 60000), goalPct = U.clamp(doneMin / goalMin, 0, 1);
   const hour = new Date().getHours(), greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const lastFull = p.tests.find(t => t.sum && t.sum.total);
   const act = Engine.activityDays(p, 14), maxAct = Math.max(5, ...act.map(d => d.n));
   const first = p.hist.length < 10;
   const resume = p.session ? `<div class="banner">${ic('clock', 20)}<div><b>Unfinished session</b><span>${esc(p.session.title)}</span></div><div class="row"><button class="btn btn-primary sm" data-act="resumeSession">Resume</button><button class="btn btn-ghost sm" data-act="discardSession">Discard</button></div></div>` : '';
-  const scoreCard = est.enough ? `<div class="score-mini"><div class="sm-top">${UI.ring(U.clamp((est.total - 400) / Math.max(1, p.target - 400), 0, 1), 104, est.total, 'estimated')}
-      <div class="sm-r"><div><b>${est.rw}</b><span>Reading &amp; Writing</span></div><div><b>${est.math}</b><span>Math</span></div></div></div>
-      <p class="hint">${est.total >= p.target ? `You are at your ${p.target} goal. Aim higher or lock it in with timed tests.` : `${p.target - est.total} points to your ${p.target} goal.`} Estimated from ${est.n} practice questions.</p></div>`
-    : `<div class="score-mini"><div class="sm-top">${UI.ring(U.clamp(est.n / 40, 0, 1), 104, est.n + '/40', 'questions')}<div class="sm-r"><p>Answer about <b>40 questions</b> to unlock your score estimate and weak-spot analysis.</p></div></div></div>`;
+  const ringTo = lvl.total != null ? UI.ring(U.clamp((lvl.total - sc.min) / Math.max(1, p.target - sc.min), 0, 1), 104, lvl.total, lvl.source === 'practice' ? 'estimated' : 'last real') : '';
+  const gapText = lvl.total != null ? (lvl.total >= p.target ? `You are at your ${p.target} goal. Aim higher or lock it in with timed tests.` : `${p.target - lvl.total} points to your ${p.target} goal.`) : '';
+  const scoreCard = lvl.source !== 'none' ? `<div class="score-mini"><div class="sm-top">${ringTo}
+      <div class="sm-r"><div><b>${lvl.rw}</b><span>Reading &amp; Writing</span></div><div><b>${lvl.math}</b><span>Math</span></div></div></div>
+      <p class="hint">${gapText} ${lvl.source === 'practice' ? `Estimated from ${est.n} practice questions.` : `From your ${E[lvl.entry.exam].name} on ${new Date(lvl.entry.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}. Practice will refine this.`}</p></div>`
+    : `<div class="score-mini"><div class="sm-top">${UI.ring(U.clamp(est.n / 40, 0, 1), 104, est.n + '/40', 'questions')}<div class="sm-r"><p>Answer about <b>40 questions</b> to unlock your score estimate and weak-spot analysis, or <button class="link" data-act="addScore">add a real score</button>.</p></div></div></div>`;
+  const priorPrompt = p.prior.length ? '' : `<div class="banner soft">${ic('trophy', 20)}<div><b>Taken the SAT or PSAT before?</b><span>Add your score so practice starts at the right level and your plan knows the gap to your goal.</span></div><button class="btn btn-soft sm" data-act="addScore">Add a score</button></div>`;
+  const nm = sc.id !== 'sat' ? Engine.nmEstimate(p) : null;
   const focusHTML = an.focus.length ? an.focus.map(x => `<div class="step"><div class="step-t"><b>${esc(x.skill.name)}</b><small>${esc(DOMAINS[x.skill.dom].short)} · ${esc(Engine.reasonFor(x))}</small>${UI.bar(x.m, UI.masteryClass(x.m, x.n), x.skill.name + ' mastery')}</div><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${x.skill.id}">${ic('practice', 16)} Practice</button></div>`).join('')
     : `<p class="empty">${first ? 'Take the diagnostic and your weakest skills will show up here.' : 'No clear weak spots yet. Keep practicing across different skills.'}</p>`;
   const stepsHTML = `<section class="card"><h2>How this works</h2><ol class="steps"><li><b>1. Take the diagnostic</b><span>About 27 questions, one per skill, so we can see where you stand.</span></li><li><b>2. See your weak spots</b><span>Your results rank every skill and show what to practice first.</span></li><li><b>3. Follow your daily plan</b><span>Short sessions that adapt as you improve, plus a notebook for every miss.</span></li></ol></section>`;
   const html = `<div class="page">
-    ${pageHead(`${greet}, ${esc(p.name)}`, `${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`, `${st ? `<span class="chip-stat hot">${ic('flame', 16)}${st}-day streak</span>` : ''}${countdownChip(p)}`)}
+    ${pageHead(`${greet}, ${esc(p.name)}`, `${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`, `${st ? `<span class="chip-stat hot">${ic('flame', 16)}${st}-day streak</span>` : ''}${sc.id !== 'sat' ? `<a class="chip-stat" href="#/scholarship">${ic('trophy', 16)}${sc.name}${nm ? ` · NM index ~${nm.index}` : ''}</a>` : ''}${countdownChip(p)}`)}
     ${resume}
-    ${first ? `<section class="hero-card"><div><span class="eyebrow">Start here</span><h2>Take the diagnostic</h2><p>A one-sitting check of every SAT skill. It takes about ${p.hist.length ? '25' : '35'}-70 minutes (you can stop and resume) and tells us exactly what to practice first.</p>
+    ${priorPrompt}
+    ${first ? `<section class="hero-card"><div><span class="eyebrow">Start here</span><h2>Take the diagnostic</h2><p>A one-sitting check of every ${sc.name} skill. It takes about ${p.hist.length ? '25' : '35'}-70 minutes (you can stop and resume) and tells us exactly what to practice first.</p>
       <div class="row"><button class="btn btn-primary lg" data-act="startDiag" data-arg="1">${ic('target', 18)} Quick diagnostic · 27 questions</button><button class="btn btn-ghost" data-act="startDiag" data-arg="2">Full · 54 questions</button></div></div></section>` : ''}
     <div class="grid3">
       <section class="card today"><div class="card-head"><h2>Today’s practice</h2></div><p class="sub">${p.dailyMin}-minute plan · built from your weak spots${due ? ` and ${due} due mistake${due > 1 ? 's' : ''}` : ''}.</p>
@@ -134,9 +112,10 @@ UI.acts.fixWeak = () => { const an = Engine.analyze(prof()); UI.confirmStart(() 
 
 /* =================== TESTS =================== */
 UI.routes.tests = (a, p) => {
+  const sc = Engine.examOf(p);
   const card = (kind, icon, title, desc, facts, primary) => `<article class="card test-card ${primary ? 'primary' : ''}"><span class="tile-i">${ic(icon, 22)}</span><h2>${title}</h2><p>${desc}</p><ul class="facts sm">${facts.map(f => `<li>${f}</li>`).join('')}</ul><button class="btn ${primary ? 'btn-primary' : 'btn-soft'}" data-act="startTest" data-arg="${kind}">${ic('play', 16)} Start</button></article>`;
   const hist = p.tests.filter(t => t.mode === 'test' || t.mode === 'diag' || t.mode === 'quiz' || t.mode === 'practice' || t.mode === 'daily' || t.mode === 'review').slice(0, 12);
-  const html = `<div class="page">${pageHead('Practice tests', 'Timed, adaptive and built like the Digital SAT: two modules per section, and Module 2 gets harder or easier based on Module 1.')}
+  const html = `<div class="page">${pageHead('Practice tests', `Timed, adaptive and built like the Digital ${sc.name}: two modules per section, and Module 2 gets harder or easier based on Module 1.${sc.id !== 'sat' ? ` Scores use the ${sc.name} scale (${sc.min} to ${sc.max}).` : ''}`)}
     <div class="banner soft">${ic('info', 20)}<div><b>${p.extended ? 'Extended time (1.5×) is on' : 'Standard timing'}</b><span>Change this in <a href="#/settings">Settings</a>. Your score here is an estimate, expect real results to vary.</span></div></div>
     <div class="grid3">
       ${card('full', 'tests', 'Full-length test', '2 Reading &amp; Writing modules, a 10-minute break, then 2 Math modules.', ['98 questions', '2 h 14 min', 'Adaptive'], true)}
@@ -146,7 +125,7 @@ UI.routes.tests = (a, p) => {
       ${card('math1', 'clock', 'Math mini-test', 'One module of Math.', ['22 questions', '35 min'], false)}
       <article class="card test-card"><span class="tile-i">${ic('target', 22)}</span><h2>Diagnostic</h2><p>One question per skill (or two). Untimed, great for a fresh baseline.</p><ul class="facts sm"><li>27 or 54 questions</li><li>Untimed</li></ul><div class="row"><button class="btn btn-soft" data-act="startDiag" data-arg="1">Quick</button><button class="btn btn-ghost" data-act="startDiag" data-arg="2">Full</button></div></article>
     </div>
-    <section class="card"><div class="card-head"><h2>History</h2></div>${hist.length ? `<div class="tbl-wrap"><table class="list-table"><thead><tr><th scope="col">Date</th><th scope="col">Session</th><th scope="col">Score / result</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${hist.map(r => `<tr><td>${UI.fmtDate(r.t)}</td><td>${esc(r.title)}</td><td>${r.sum.total ? `<b>${r.sum.total}</b> <small>RW ${r.sum.rw.score} · Math ${r.sum.math.score}</small>` : r.sum.rw && !r.sum.math ? `<b>${r.sum.rw.score}</b> <small>/800</small>` : r.sum.math && !r.sum.rw ? `<b>${r.sum.math.score}</b> <small>/800</small>` : `${r.sum.correct}/${r.sum.n} <small>${U.pct(r.sum.pct)}</small>`}</td><td><a class="btn btn-ghost sm" href="#/results/${r.id}">Review</a></td></tr>`).join('')}</tbody></table></div>` : `<p class="empty">No sessions yet. Your first test will appear here.</p>`}</section></div>`;
+    <section class="card"><div class="card-head"><h2>History</h2></div>${hist.length ? `<div class="tbl-wrap"><table class="list-table"><thead><tr><th scope="col">Date</th><th scope="col">Session</th><th scope="col">Score / result</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${hist.map(r => `<tr><td>${UI.fmtDate(r.t)}</td><td>${esc(r.title)}</td><td>${r.sum.total ? `<b>${r.sum.total}</b> <small>RW ${r.sum.rw.score} · Math ${r.sum.math.score}</small>` : r.sum.rw && !r.sum.math ? `<b>${r.sum.rw.score}</b> <small>/${Engine.EXAMS[r.sum.exam || 'sat'].secMax}</small>` : r.sum.math && !r.sum.rw ? `<b>${r.sum.math.score}</b> <small>/${Engine.EXAMS[r.sum.exam || 'sat'].secMax}</small>` : `${r.sum.correct}/${r.sum.n} <small>${U.pct(r.sum.pct)}</small>`}</td><td><a class="btn btn-ghost sm" href="#/results/${r.id}">Review</a></td></tr>`).join('')}</tbody></table></div>` : `<p class="empty">No sessions yet. Your first test will appear here.</p>`}</section></div>`;
   return { html, title: 'Tests' };
 };
 UI.acts.startTest = (k) => UI.confirmStart(() => UI.startTest(k));
@@ -168,29 +147,43 @@ UI.acts.mDelete = (id) => { delete prof().missed[id]; Store.save(true); UI.rende
 UI.acts.reviewAll = () => UI.confirmStart(() => UI.startReview(false));
 
 /* =================== PROGRESS =================== */
-function lineChart(points, target) {
-  if (points.length < 2) return `<p class="empty">Complete two or more full-length tests to see your score trend.</p>`;
-  const W = 640, H = 240, l = 44, r = 16, t = 16, b = 32, pw = W - l - r, ph = H - t - b, min = 400, max = 1600;
-  const X = i => l + (points.length === 1 ? pw / 2 : i / (points.length - 1) * pw), Y = v => t + ph - (v - min) / (max - min) * ph;
-  let s = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Full-length test scores over time: ${points.map(p => p.v).join(', ')}">`;
-  [400, 800, 1200, 1600].forEach(v => { s += `<line class="grid" x1="${l}" x2="${W - r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tick" x="${l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; });
-  if (target) s += `<line class="target" x1="${l}" x2="${W - r}" y1="${Y(target)}" y2="${Y(target)}"/><text class="tick tgt" x="${W - r}" y="${Y(target) - 6}" text-anchor="end">Goal ${target}</text>`;
+UI.lineChart = function (points, target, sc) {
+  sc = sc || Engine.EXAMS.sat;
+  if (points.length < 2) return `<p class="empty">Add a real score and finish a full-length test, or add two scores, to see your trend.</p>`;
+  const W = 640, H = 250, l = 48, r = 28, t = 16, b = 36, pw = W - l - r, ph = H - t - b;
+  const vals = points.map(p => p.v).concat(target ? [target] : []);
+  let min = Math.max(sc.min, Math.floor((Math.min(...vals) - 100) / 100) * 100), max = Math.min(sc.max, Math.ceil((Math.max(...vals) + 100) / 100) * 100);
+  if (max - min < 300) { const mid = (max + min) / 2; min = Math.max(sc.min, Math.round((mid - 150) / 100) * 100); max = Math.min(sc.max, min + 300); min = Math.max(sc.min, max - 300); }
+  const X = i => l + i / (points.length - 1) * pw, Y = v => t + ph - U.clamp((v - min) / (max - min), 0, 1) * ph;
+  const ticks = [0, 1, 2, 3].map(i => Math.round((min + (max - min) * i / 3) / 10) * 10);
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Scores over time: ${points.map(p => (p.k === 'real' ? 'real test ' : 'practice test ') + p.v + ' on ' + p.d).join(', ')}">`;
+  ticks.forEach(v => { s += `<line class="grid" x1="${l}" x2="${W - r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tick" x="${l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; });
+  if (target) s += `<line class="target" x1="${l}" x2="${W - r}" y1="${Y(target)}" y2="${Y(target)}"/><text class="tick tgt" x="${l + 4}" y="${Y(target) + 14}">Goal ${target}</text>`;
   s += `<polyline class="ln" points="${points.map((p, i) => X(i) + ',' + Y(p.v)).join(' ')}"/>`;
-  points.forEach((p, i) => { s += `<circle class="pt" cx="${X(i)}" cy="${Y(p.v)}" r="5"><title>${p.v} on ${p.d}</title></circle><text class="tick" x="${X(i)}" y="${Y(p.v) - 10}" text-anchor="middle">${p.v}</text><text class="tick" x="${X(i)}" y="${H - 10}" text-anchor="middle">${p.d}</text>`; });
-  return s + '</svg>';
-}
+  points.forEach((p, i) => {
+    const x = X(i), y = Y(p.v), tip = `<title>${p.k === 'real' ? 'Real ' + (p.label || 'test') : 'Practice test'}: ${p.v} on ${p.d}</title>`;
+    s += p.k === 'real' ? `<rect class="pt real" x="${x - 6}" y="${y - 6}" width="12" height="12" transform="rotate(45 ${x} ${y})">${tip}</rect>` : `<circle class="pt" cx="${x}" cy="${y}" r="5">${tip}</circle>`;
+    const anchor = i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle', ax = i === 0 ? x - 6 : i === points.length - 1 ? x + 6 : x;
+    s += `<text class="tick" x="${ax}" y="${y - 12}" text-anchor="${anchor}">${p.v}</text><text class="tick" x="${ax}" y="${H - 12}" text-anchor="${anchor}">${p.d}</text>`;
+  });
+  return s + `</svg><p class="legend-chart"><span><i class="lg-dot"></i> Practice test</span><span><i class="lg-dia"></i> Real test</span></p>`;
+};
 UI.routes.progress = (a, p) => {
-  const an = Engine.analyze(p), est = Engine.estimate(p), pts = p.tests.filter(t => t.sum && t.sum.total).slice().reverse().map(t => ({ v: t.sum.total, d: UI.fmtDate(t.t) }));
+  const sc = Engine.examOf(p), E = Engine.EXAMS, an = Engine.analyze(p), est = Engine.estimate(p);
+  const fmtD = t => UI.fmtDate(t);
+  const pts = p.tests.filter(t => t.sum && t.sum.total).map(t => ({ t: t.t, v: U.clamp(t.sum.total + 2 * (E[t.sum.exam || 'sat'].offset - sc.offset), sc.min, sc.max), d: fmtD(t.t), k: 'practice' }))
+    .concat(Engine.priorScores(p).map(e => ({ t: new Date(e.date + 'T00:00:00').getTime(), v: Engine.inProfileScale(p, e).total, d: fmtD(new Date(e.date + 'T00:00:00').getTime()), k: 'real', label: E[e.exam].name })))
+    .sort((x, y) => x.t - y.t);
   const pace = sec => { const b = an.bySec[sec]; return b.ms.length ? Math.round(U.median(b.ms) / 1000) : null; };
   const dRow = (d, l) => { const [ok, n] = an.byDiff[d]; return `<div class="rowbar"><span class="rb-l">${l}</span>${UI.bar(n ? ok / n : 0, n ? UI.masteryClass(ok / n, 9) : 'na', l + ' accuracy')}<span class="rb-v">${n ? Math.round(ok / n * 100) + '%' : '-'} <small>(${n})</small></span></div>`; };
   const domBlock = d => { const sk = an.list.filter(x => x.skill.dom === d.id); const avg = sk.reduce((s, x) => s + x.m, 0) / sk.length;
     return `<div class="dom-card"><div class="dom-t"><b>${d.name}</b><small>${SEC_LABEL[d.sec]} · ~${Math.round(d.w * 100)}% of the section</small></div>${sk.map(x => `<div class="skrow"><div class="skrow-t"><span>${esc(x.skill.name)}</span><small>${x.n >= 1 ? Math.round(x.m * 100) + '% mastery · ' + x.ok + '/' + x.n + (x.n < 3 ? ' (early read)' : '') : 'not assessed yet'}</small></div>${UI.bar(x.n >= 1 ? x.m : 0, UI.masteryClass(x.m, x.n), x.skill.name + ' mastery')}<span class="tag ${UI.masteryClass(x.m, x.n)}">${UI.masteryLabel(x.m, x.n)}</span><button class="icon-btn sm" data-act="practiceSkill" data-arg="${x.skill.id}" aria-label="Practice ${esc(x.skill.name)}">${ic('play', 16)}</button></div>`).join('')}</div>`; };
   const html = `<div class="page">${pageHead('Progress', `${p.hist.length} questions answered · ${UI.plural(p.tests.length, 'session')}`)}
     <div class="grid3">
-      <section class="card stat"><span class="eyebrow">Estimated total</span><div class="big-n">${est.enough ? est.total : '-'}<small>/1600</small></div><p class="hint">${est.enough ? `Goal ${p.target}. Rough estimate from practice accuracy; full tests are the better measure.` : 'Answer more questions in both sections to unlock this.'}</p></section>
-      <section class="card stat"><span class="eyebrow">Reading &amp; Writing</span><div class="big-n">${est.rwN >= 8 ? est.rw : '-'}<small>/800</small></div><p class="hint">Median ${pace('rw') ? pace('rw') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.rw / 1000)}s)</p></section>
-      <section class="card stat"><span class="eyebrow">Math</span><div class="big-n">${est.mathN >= 8 ? est.math : '-'}<small>/800</small></div><p class="hint">Median ${pace('math') ? pace('math') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.math / 1000)}s)</p></section></div>
-    <section class="card"><div class="card-head"><h2>Full-length test scores</h2></div>${lineChart(pts, p.target)}</section>
+      <section class="card stat"><span class="eyebrow">Estimated total</span><div class="big-n">${est.enough ? est.total : '-'}<small>/${sc.max}</small></div><p class="hint">${est.enough ? `Goal ${p.target}. Rough estimate from practice accuracy; full tests are the better measure.` : 'Answer more questions in both sections to unlock this.'}</p></section>
+      <section class="card stat"><span class="eyebrow">Reading &amp; Writing</span><div class="big-n">${est.rwN >= 8 ? est.rw : '-'}<small>/${sc.secMax}</small></div><p class="hint">Median ${pace('rw') ? pace('rw') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.rw / 1000)}s)</p></section>
+      <section class="card stat"><span class="eyebrow">Math</span><div class="big-n">${est.mathN >= 8 ? est.math : '-'}<small>/${sc.secMax}</small></div><p class="hint">Median ${pace('math') ? pace('math') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.math / 1000)}s)</p></section></div>
+    <section class="card"><div class="card-head"><h2>Real and practice test scores</h2></div>${UI.lineChart(pts, p.target, sc)}</section>
     <section class="card"><div class="card-head"><h2>Skill by skill</h2><span class="hint">Mastery is a rolling estimate that weights recent answers and question difficulty.</span></div><div class="dom-grid">${Object.values(DOMAINS).map(domBlock).join('')}</div></section>
     <div class="grid2"><section class="card"><h2>Accuracy by difficulty</h2><div class="stack">${dRow(1, 'Easy')}${dRow(2, 'Medium')}${dRow(3, 'Hard')}</div><p class="hint">Missing easy questions points to a rule or formula gap. Missing only hard ones is a good place to be.</p></section>
       <section class="card"><h2>What the data says</h2>${an.notes.length || an.focus.length ? `${an.focus.slice(0, 3).map(x => `<div class="note">${ic('target', 18)}<p><b>${esc(x.skill.name)}</b>: ${esc(Engine.reasonFor(x))}.</p></div>`).join('')}${an.notes.map(n => `<div class="note ${n.k === 'up' ? 'ok' : ''}">${ic(n.k === 'up' ? 'trophy' : 'bulb', 18)}<p>${esc(n.t)}</p></div>`).join('')}` : '<p class="empty">Insights show up after about 30 questions.</p>'}</section></div></div>`;
@@ -199,15 +192,16 @@ UI.routes.progress = (a, p) => {
 
 /* =================== STUDY PLAN =================== */
 UI.routes.plan = (a, p) => {
-  const an = Engine.analyze(p), est = Engine.estimate(p), days = U.daysUntil(p.testDate), wk = Engine.weekPlan(p), dow = new Date().getDay(), td = Engine.todayStats(p);
-  const gap = Math.max(0, p.target - est.total), perDay = Math.round(p.dailyMin / 1.6);
+  const an = Engine.analyze(p), est = Engine.estimate(p), days = U.daysUntil(p.testDate), wk = Engine.weekPlan(p), dow = new Date().getDay(), td = Engine.todayStats(p), lvl = Engine.currentLevel(p), sc = Engine.examOf(p);
+  const gap = lvl.source === 'none' ? 0 : Math.max(0, p.target - lvl.total), perDay = Math.round(p.dailyMin / 1.6);
+  const diff = lvl.source === 'none' ? 0 : Math.abs(lvl.rw - lvl.math), weakNote = diff >= 40 ? ` ${lvl.math < lvl.rw ? 'Math' : 'Reading &amp; Writing'} is ${diff} points lower, so start there.` : '';
   const horizon = days !== null && days > 0 ? days : 56;
   const phases = [['Close the gaps', 0.4, 'Daily targeted sets on your weakest skills; read each Skill Guide tip.'], ['Build speed and stamina', 0.4, 'Mixed, timed sets and a section test each week.'], ['Test-day readiness', 0.2, 'Full-length tests, then review every mistake. Light practice the last 2 days.']];
   let cursor = Date.now();
   const phaseHTML = phases.map(([n, f, d], i) => { const len = Math.round(horizon * f), start = new Date(cursor), end = new Date(cursor + len * 86400000); cursor += len * 86400000; return `<li class="phase"><span class="ph-n">${i + 1}</span><div><b>${n}</b><small>${UI.fmtDate(start)} to ${UI.fmtDate(end)} · ${len} days</small><p>${d}</p></div></li>`; }).join('');
   const html = `<div class="page">${pageHead('Study plan', 'Built from your target, test date and current weak spots. It updates as you improve.')}
     <div class="grid3">
-      <section class="card stat"><span class="eyebrow">Goal</span><div class="big-n">${p.target}<small>target</small></div><p class="hint">${est.enough ? `Now ~${est.total}. ${gap ? gap + ' points to go.' : 'You are at goal level.'}` : 'Take the diagnostic to measure your starting point.'}</p></section>
+      <section class="card stat"><span class="eyebrow">Goal</span><div class="big-n">${p.target}<small>target</small></div><p class="hint">${lvl.source === 'none' ? `Take the diagnostic, or <button class="link" data-act="addScore">add a real score</button>, to measure your starting point.` : `${lvl.source === 'practice' ? 'Now about' : 'Last real score:'} ${lvl.total}. ${gap ? gap + ' points to go.' : 'You are at goal level.'}${weakNote}`}</p></section>
       <section class="card stat"><span class="eyebrow">Time left</span><div class="big-n">${days === null ? '-' : Math.max(0, days)}<small>days</small></div>${days === null ? `<label class="lbl" for="p-date">Add your test date</label><input id="p-date" class="inp" type="date" min="${U.today()}" data-ch="planDate">` : `<p class="hint">Test date ${new Date(p.testDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}. <a href="#/settings">Change</a></p>`}</section>
       <section class="card stat"><span class="eyebrow">Daily load</span><div class="big-n">${p.dailyMin}<small>min</small></div><p class="hint">About ${perDay} questions a day, adjusted to your weak spots.</p></section></div>
     <div class="grid2">
@@ -244,7 +238,7 @@ UI.routes.parent = () => {
       <div class="stats4"><div><b>${est.enough ? est.total : '-'}</b><span>est. score</span></div><div><b>${lastFull ? lastFull.sum.total : '-'}</b><span>last full test</span></div><div><b>${wk.length}</b><span>questions this week${wk.length ? ` (${Math.round(wkOk / wk.length * 100)}% right)` : ''}</span></div><div><b>${st}</b><span>day streak</span></div></div>
       <div class="kid-r"><div><h3>Needs work</h3>${an.focus.length ? `<ul class="plain-list">${an.focus.map(x => `<li>${esc(x.skill.name)} <small>${Math.round(x.m * 100)}%</small></li>`).join('')}</ul>` : '<p class="hint">Not enough data yet.</p>'}</div>
         <div><h3>Going well</h3>${an.strong.length ? `<ul class="plain-list">${an.strong.map(x => `<li>${esc(x.skill.name)} <small>${Math.round(x.m * 100)}%</small></li>`).join('')}</ul>` : '<p class="hint">Not enough data yet.</p>'}</div></div>
-      <p class="hint">${last ? 'Last practiced ' + new Date(last).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : 'Has not practiced yet.'} · ${Object.keys(p.missed).length} mistakes in notebook</p></article>`;
+      <p class="hint">${last ? 'Last practiced ' + new Date(last).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : 'Has not practiced yet.'} · ${Object.keys(p.missed).length} mistakes in notebook${Engine.priorScores(p)[0] ? ` · Latest real score: ${Engine.EXAMS[Engine.priorScores(p)[0].exam].name} ${Engine.priorScores(p)[0].total}` : ''}</p></article>`;
   };
   return { html: `<div class="page">${pageHead('Parent view', 'A quick look at how each student is doing. Everything stays on this device.', `<button class="btn btn-soft" onclick="window.print()">${ic('print', 16)} Print report</button><button class="btn btn-ghost" data-act="newProfile">${ic('plus', 16)} Add student</button>`)}<div class="kids">${profs.map(card).join('')}</div>
     <section class="card"><h2>How to help</h2><ul class="plain-list tips"><li>Aim for short daily sessions (the plan sets the length) rather than marathon weekends.</li><li>Ask them to explain a missed question out loud, the mistake notebook is built for that.</li><li>Do a full-length test every two weeks in a quiet space, timed, calculator ready.</li><li>Use Settings → Download backup occasionally, since progress is stored in this browser.</li></ul></section></div>`, title: 'Parent view' };
@@ -252,12 +246,14 @@ UI.routes.parent = () => {
 
 /* =================== SETTINGS =================== */
 UI.routes.settings = (a, p) => {
+  const sc = Engine.examOf(p);
   const s = Store.get(), ai = s.aiCfg, defModel = { gemini: 'gemini-2.0-flash', openai: 'gpt-4o-mini', anthropic: 'claude-haiku-5-5' };
   const html = `<div class="page narrow">${pageHead('Settings')}
     <section class="card"><h2>Student profile</h2><div class="form-grid">
+      <div class="field wide"><span class="lbl">Exam focus</span><div class="seg" role="radiogroup" aria-label="Exam focus">${[['sat', 'SAT'], ['psat', 'PSAT/NMSQT'], ['psat10', 'PSAT 10']].map(([k, l]) => `<button class="seg-i ${sc.id === k ? 'on' : ''}" role="radio" aria-checked="${sc.id === k}" data-act="setExamAct" data-arg="${k}"><span>${l}</span></button>`).join('')}</div><p class="hint">The SAT is the main focus. Choose a PSAT to practice on its scale for National Merit. <a href="#/scores">Your real scores</a></p></div>
       <div class="field"><label for="st-name">Name</label><input id="st-name" class="inp" value="${esc(p.name)}" maxlength="24" data-ch="setName"></div>
       <div class="field"><label for="st-grade">Grade</label><select id="st-grade" class="inp" data-ch="setGrade">${[9, 10, 11, 12].map(g => `<option ${p.grade === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
-      <div class="field"><label for="st-target">Target score: <output id="st-tout">${p.target}</output></label><input id="st-target" type="range" min="800" max="1600" step="10" value="${p.target}" data-in="setTarget"></div>
+      <div class="field"><label for="st-target">Target score: <output id="st-tout">${p.target}</output></label><input id="st-target" type="range" min="${sc.id === 'sat' ? 800 : 640}" max="${sc.max}" step="10" value="${p.target}" data-in="setTarget"></div>
       <div class="field"><label for="st-date">Test date</label><input id="st-date" class="inp" type="date" value="${p.testDate || ''}" data-ch="setDate"></div>
       <div class="field"><label for="st-min">Daily study time</label><select id="st-min" class="inp" data-ch="setMin">${[15, 30, 45, 60, 90, 120].map(m => `<option value="${m}" ${p.dailyMin === m ? 'selected' : ''}>${m} minutes</option>`).join('')}</select></div></div>
       <div class="toggles"><label class="switch"><input type="checkbox" data-ch="setExt" ${p.extended ? 'checked' : ''}><span class="sw"></span><span><b>Extended time (1.5×)</b><small>For students with testing accommodations</small></span></label>
@@ -282,6 +278,12 @@ UI.routes.settings = (a, p) => {
 const setP = (k, v) => { prof()[k] = v; Store.save(true); };
 UI.ins.setName = v => { if (v.trim()) { setP('name', v.trim()); } };
 UI.ins.setGrade = v => setP('grade', +v);
+UI.acts.setExamAct = (k) => {
+  const p = prof(), from = Engine.examOf(p), to = Engine.EXAMS[k]; if (!to || from.id === to.id) return;
+  const satTotal = p.target + 2 * from.offset;
+  p.target = U.clamp(Math.round((satTotal - 2 * to.offset) / 10) * 10, k === 'sat' ? 800 : 640, to.max);
+  p.exam = k; Store.save(true); UI.toast(`Practice now uses the ${to.name} scale. Your target is ${p.target}.`, 'ok'); UI.render();
+};
 UI.ins.setTarget = (v) => { $('#st-tout').textContent = v; setP('target', +v); };
 UI.ins.setDate = v => setP('testDate', v);
 UI.ins.setMin = v => setP('dailyMin', +v);

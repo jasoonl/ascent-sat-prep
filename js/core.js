@@ -56,13 +56,67 @@ function gradeGrid(input, answer) {
   return Math.abs(x - y) < 1e-9 || (!Number.isInteger(y) && Math.abs(x - y) <= 0.005);
 }
 
+/* ================= exams, score scales, prior scores ================= */
+/* Digital SAT: sections 200-800 (total 400-1600). Digital PSAT/NMSQT and PSAT 10: sections 160-760 (total 320-1520).
+   PSAT 8/9: sections 120-720 (total 240-1440). `offset` is the approximate SAT-equivalent shift per section. */
+const EXAMS = {
+  sat:    { id: 'sat',    name: 'SAT',        min: 400, max: 1600, secMin: 200, secMax: 800, offset: 0 },
+  psat:   { id: 'psat',   name: 'PSAT/NMSQT', min: 320, max: 1520, secMin: 160, secMax: 760, offset: 40 },
+  psat10: { id: 'psat10', name: 'PSAT 10',    min: 320, max: 1520, secMin: 160, secMax: 760, offset: 40 },
+  psat89: { id: 'psat89', name: 'PSAT 8/9',   min: 240, max: 1440, secMin: 120, secMax: 720, offset: 80 }
+};
+const examOf = p => EXAMS[(p && p.exam) || 'sat'] || EXAMS.sat;
+const toSat = (score, exam) => U.clamp(score + EXAMS[exam].offset, 200, 800);
+const fromSat = (score, exam) => { const e = EXAMS[exam] || EXAMS.sat; return U.clamp(Math.round((score - e.offset) / 10) * 10, e.secMin, e.secMax); };
+const selectionIndex = (rw, math) => Math.round((2 * rw + math) / 10);   // National Merit Selection Index, 48-228
+
+/* Validate a score a student typed in. Returns { ok, err: {field: message}, entry }. */
+function validateScore(o) {
+  const ex = EXAMS[o.exam], err = {}, num = v => (v === '' || v == null) ? null : Number(v);
+  if (!ex) { err.exam = 'Choose which test this was.'; return { ok: false, err }; }
+  let rw = num(o.rw), math = num(o.math), total = num(o.total);
+  const sec = (v, k, label) => { if (v !== null && (!Number.isInteger(v) || v % 10 !== 0 || v < ex.secMin || v > ex.secMax)) err[k] = `${label} is a multiple of 10 from ${ex.secMin} to ${ex.secMax}.`; };
+  sec(rw, 'rw', 'Reading & Writing'); sec(math, 'math', 'Math');
+  if (total !== null && (!Number.isInteger(total) || total % 10 !== 0 || total < ex.min || total > ex.max)) err.total = `Total is a multiple of 10 from ${ex.min} to ${ex.max}.`;
+  if (!o.date) err.date = 'Add the date you took it (a month and year is fine, pick any day).';
+  else if (o.date > U.today()) err.date = 'That date is in the future.';
+  if (!Object.keys(err).length) {
+    if (rw !== null && math !== null) { if (total !== null && total !== rw + math) err.total = `Total should equal Reading & Writing + Math (${rw + math}).`; else total = rw + math; }
+    else if (total !== null && (rw !== null || math !== null)) { const other = total - (rw !== null ? rw : math), k = rw !== null ? 'math' : 'rw'; if (other < ex.secMin || other > ex.secMax) err.total = 'Those numbers do not add up. Check the total and section scores.'; else if (k === 'math') math = other; else rw = other; }
+    else if (total === null) err.total = 'Enter the total score, or both section scores.';
+  }
+  if (Object.keys(err).length) return { ok: false, err };
+  return { ok: true, err, entry: { id: o.id || U.uid(), exam: o.exam, date: o.date, total, rw, math } };
+}
+const priorScores = p => ((p && p.prior) || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+/* A prior score converted to the SAT scale ({rw, math, total}); total-only scores split evenly. */
+function satEquivalent(e) {
+  const half = Math.round(e.total / 20) * 10, rw = e.rw != null ? e.rw : half, math = e.math != null ? e.math : e.total - half;
+  const r = toSat(rw, e.exam), m = toSat(math, e.exam); return { rw: r, math: m, total: r + m, sectionsKnown: e.rw != null && e.math != null };
+}
+/* Most recent real score, as SAT-scale numbers (used to start difficulty and fill the gap before practice data exists). */
+function baseline(p) { const e = priorScores(p)[0]; if (!e) return null; return Object.assign({ entry: e }, satEquivalent(e)); }
+/* Same entry converted onto the profile's own scale (for charts and gap-to-goal). */
+function inProfileScale(p, e) { const sat = satEquivalent(e), x = examOf(p).id; const rw = fromSat(sat.rw, x), math = fromSat(sat.math, x); return { rw, math, total: rw + math }; }
+/* PSAT-scale sections and Selection Index from practice (if enough data) or the latest real score. */
+function nmEstimate(p) {
+  const est = estimateSat(p); let rw, math, source;
+  if (est.enough) { rw = fromSat(est.rw, 'psat'); math = fromSat(est.math, 'psat'); source = 'practice'; }
+  else { const b = baseline(p); if (!b) return null; rw = fromSat(b.rw, 'psat'); math = fromSat(b.math, 'psat'); source = 'real'; }
+  return { rw, math, index: selectionIndex(rw, math), source };
+}
+
 /* ================= storage ================= */
 const KEY = 'ascent.sat.v1';
 let state = null, saveTimer = null;
 function blank() { return { v: 1, activeId: null, profiles: {}, settings: { theme: 'auto' }, custom: [], ai: [], aiCfg: { provider: 'gemini', model: '', key: '' } }; }
+function fixProfile(p) { // profiles saved by older versions get the newer fields
+  if (!EXAMS[p.exam]) p.exam = 'sat'; if (!Array.isArray(p.prior)) p.prior = []; if (p.nmTarget == null) p.nmTarget = 0; return p;
+}
 function load() {
   try { const raw = localStorage.getItem(KEY); state = raw ? Object.assign(blank(), JSON.parse(raw)) : blank(); }
   catch (e) { state = blank(); }
+  Object.values(state.profiles).forEach(fixProfile);
   return state;
 }
 function save(now) {
@@ -77,7 +131,7 @@ const Store = {
   create(o) {
     const s = Store.get(), id = U.uid();
     s.profiles[id] = Object.assign({ id, name: 'Student', grade: 11, target: 1300, testDate: '', dailyMin: 30, createdAt: Date.now(),
-      hist: [], missed: {}, flagged: {}, seen: {}, tests: [], session: null, extended: false, showTimer: true, doneTasks: {} }, o);
+      hist: [], missed: {}, flagged: {}, seen: {}, tests: [], session: null, extended: false, showTimer: true, doneTasks: {}, exam: 'sat', prior: [], nmTarget: 0 }, o);
     s.activeId = id; save(true); return s.profiles[id];
   },
   switchTo(id) { const s = Store.get(); if (s.profiles[id]) { s.activeId = id; save(true); } },
@@ -170,10 +224,21 @@ function sectionEstimate(prof, sec) {
   const p = den ? num / den : 0.5, score = Math.round((200 + 600 * U.clamp((p - 0.25) / 0.7, 0, 1)) / 10) * 10;
   return { score, p, n };
 }
-function estimate(prof) {
+function estimateSat(prof) {
   const rw = sectionEstimate(prof, 'rw'), m = sectionEstimate(prof, 'math');
   const enough = rw.n >= 8 && m.n >= 8;
   return { rw: rw.score, math: m.score, total: rw.score + m.score, n: rw.n + m.n, enough, rwN: rw.n, mathN: m.n };
+}
+/* Practice-based estimate shown on the student's own exam scale (SAT by default). */
+function estimate(prof) {
+  const e = estimateSat(prof), x = examOf(prof).id, rw = fromSat(e.rw, x), math = fromSat(e.math, x);
+  return Object.assign({}, e, { rw, math, total: rw + math });
+}
+/* What to show as "current level": practice estimate once there is enough data, otherwise the latest real score. */
+function currentLevel(prof) {
+  const est = estimate(prof); if (est.enough) return { source: 'practice', rw: est.rw, math: est.math, total: est.total, est };
+  const b = priorScores(prof)[0]; if (!b) return { source: 'none', est };
+  const v = inProfileScale(prof, b); return { source: 'real', rw: v.rw, math: v.math, total: v.total, entry: b, est };
 }
 const TARGET_MS = { rw: 71000, math: 95000 };
 
@@ -233,7 +298,11 @@ function todayStats(prof) {
 const SEEN_DAYS = 14;
 function targetDiff(prof, skill) {
   const x = skillStats(prof)[skill];
-  if (x.n < 2) return 2;
+  if (x.n < 2) {
+    const b = baseline(prof); if (!b) return 2;
+    const sc = SKILL_BY_ID[skill].sec === 'rw' ? b.rw : b.math;
+    return sc < 480 ? U.pick([1, 1, 2]) : sc > 650 ? U.pick([2, 3]) : 2;
+  }
   const m = x.m;
   return m < 0.4 ? U.pick([1, 1, 2]) : m < 0.65 ? U.pick([1, 2, 2]) : m < 0.85 ? U.pick([2, 2, 3]) : U.pick([2, 3, 3]);
 }
@@ -273,13 +342,14 @@ function pickQuestions(prof, weights, n, diff, used) {
 const MOD_COUNT = { rw: 27, math: 22 };
 const ALLOC = { rw: { cs: 8, ii: 7, sec: 7, eoi: 5 }, math: { alg: 8, adv: 7, psda: 4, geo: 3 } };
 const MIX = { mixed: [0.3, 0.5, 0.2], easy: [0.5, 0.4, 0.1], hard: [0.15, 0.35, 0.5] };
+const MIXP = { mixed: [0.4, 0.45, 0.15], easy: [0.55, 0.38, 0.07], hard: [0.2, 0.4, 0.4] };   // PSAT is a little easier
 function buildModule(prof, sec, level, count, used) {
   count = count || MOD_COUNT[sec]; used = used || newUsed();
   const alloc = ALLOC[sec], scale = count / Object.values(alloc).reduce((a, b) => a + b, 0), qs = [];
   for (const dom in alloc) {
     const k = Math.max(1, Math.round(alloc[dom] * scale)), sks = SKILLS.filter(s => s.dom === dom).map(s => ({ id: s.id, w: s.w }));
     for (let i = 0; i < k; i++) {
-      const r = Math.random(), mix = MIX[level], d = r < mix[0] ? 1 : r < mix[0] + mix[1] ? 2 : 3;
+      const r = Math.random(), mix = (prof && prof.exam && prof.exam !== 'sat' ? MIXP : MIX)[level], d = r < mix[0] ? 1 : r < mix[0] + mix[1] ? 2 : 3;
       const got = pickQuestions(prof, sks, 1, d, used); if (got[0]) qs.push(got[0]);
     }
   }
@@ -337,6 +407,7 @@ function weekPlan(prof) {
 
 window.U = U; window.fmt = fmt; window.gradeGrid = gradeGrid; window.parseGrid = parseGrid;
 window.Store = Store; window.Bank = Bank;
-window.Engine = { skillStats, estimate, sectionEstimate, analyze, reasonFor, streak, activityDays, todayStats, pickQuestions, buildModule, newUsed, weightedPct, scoreSection,
+window.Engine = { EXAMS, examOf, toSat, fromSat, selectionIndex, validateScore, priorScores, satEquivalent, baseline, inProfileScale, nmEstimate, currentLevel, estimateSat,
+  toScale: (p, satScore) => fromSat(satScore, examOf(p).id), skillStats, estimate, sectionEstimate, analyze, reasonFor, streak, activityDays, todayStats, pickQuestions, buildModule, newUsed, weightedPct, scoreSection,
   ROUTE_UP, MOD_COUNT, TARGET_MS, recordAnswer, dueMissed, buildDaily, weekPlan, targetDiff, BOX_DAYS };
 }());

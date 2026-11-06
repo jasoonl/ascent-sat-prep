@@ -70,6 +70,8 @@ const NAV = [
   { id: 'mistakes', label: 'Mistake notebook', icon: 'mistakes' },
   { id: 'plan', label: 'Study plan', icon: 'plan' },
   { id: 'skills', label: 'Skill guide', icon: 'skills' },
+  { id: 'scores', label: 'My scores', icon: 'list' },
+  { id: 'scholarship', label: 'Scholarship', icon: 'trophy' },
   { id: 'parent', label: 'Parent view', icon: 'users' },
   { id: 'settings', label: 'Settings', icon: 'settings' }
 ];
@@ -81,7 +83,7 @@ function shellHTML() {
   return `<a class="skip" href="#view" data-act="skip">Skip to content</a>
   <div class="shell">
     <aside class="side" aria-label="Main navigation">
-      <a class="brand" href="#/home">${ic('logo', 26)}<span>Ascent <small>SAT Prep</small></span></a>
+      <a class="brand" href="#/home">${ic('logo', 26)}<span>Ascent <small>SAT &amp; PSAT Prep</small></span></a>
       <nav class="side-nav">${NAV.map(n => `<a class="nav-item" href="#/${n.id}" data-nav="${n.id}">${ic(n.icon, 20)}<span>${n.label}</span><i class="nav-badge" data-badge="${n.id}" hidden></i></a>`).join('')}</nav>
       <div class="side-foot">
         <button class="who" data-act="switchProfile" aria-label="Switch student profile"><span class="avatar" id="av1"></span><span class="who-t"><b id="whoName"></b><small>Switch student</small></span>${ic('down', 16)}</button>
@@ -130,7 +132,7 @@ UI.render = function render() {
   }
   if (out.after) out.after(view);
   if (!out.keepScroll) window.scrollTo(0, 0);
-  if (out.title) document.title = out.title + ' · Ascent SAT Prep'; else document.title = 'Ascent SAT Prep';
+  if (out.title) document.title = out.title + ' · Ascent SAT & PSAT Prep'; else document.title = 'Ascent SAT & PSAT Prep';
   if (!out.noFocus) { try { view.focus({ preventScroll: true }); } catch (e) { } }
 };
 window.addEventListener('hashchange', () => UI.render());

@@ -84,7 +84,8 @@ UI.startTest = (kind) => {
     rw: [pl('rw', 0, ''), pl('rw', 1, '')], math: [pl('math', 0, ''), pl('math', 1, '')],
     rw1: [Object.assign(pl('rw', 0, ''), { name: 'Reading and Writing mini-test' })], math1: [Object.assign(pl('math', 0, ''), { name: 'Math mini-test' })]
   };
-  const titles = { full: 'Full-length practice test', rw: 'Reading and Writing section test', math: 'Math section test', rw1: 'Reading and Writing mini-test', math1: 'Math mini-test' };
+  const xn = Engine.examOf(prof()).name;
+  const titles = { full: `${xn} full-length practice test`, rw: 'Reading and Writing section test', math: 'Math section test', rw1: 'Reading and Writing mini-test', math1: 'Math mini-test' };
   UI.startSession({ mode: 'test', kind, title: titles[kind], tutor: false, back: '/tests', plan: plans[kind] });
 };
 
@@ -118,11 +119,11 @@ function finishSession(S) {
   const p = prof(), mods = S.mods;
   const allQ = []; mods.forEach(m => m.qs.forEach((q, i) => allQ.push({ q, a: m.ans[i], ok: isOk(q, m.ans[i]), ms: m.ms[i], flag: m.flag[i], sec: m.sec })));
   const sum = { n: allQ.length, correct: allQ.filter(x => x.ok).length, answered: allQ.filter(x => answered(x.a)).length, ms: allQ.reduce((s, x) => s + x.ms, 0) };
-  sum.pct = sum.n ? sum.correct / sum.n : 0;
+  sum.pct = sum.n ? sum.correct / sum.n : 0; sum.exam = Engine.examOf(p).id;
   const scoreFor = sec => {
     const ms = mods.filter(m => m.sec === sec); if (ms.length < 2) return null;
     const hard = !!(S.route[sec] && S.route[sec].hard), m1 = modulePct(ms[0]), m2 = modulePct(ms[1]);
-    return { score: Engine.scoreSection(m1, m2, hard), hard, m1, m2, c1: ms[0].qs.filter((q, i) => isOk(q, ms[0].ans[i])).length, c2: ms[1].qs.filter((q, i) => isOk(q, ms[1].ans[i])).length, n1: ms[0].qs.length, n2: ms[1].qs.length };
+    return { score: Engine.toScale(p, Engine.scoreSection(m1, m2, hard)), hard, m1, m2, c1: ms[0].qs.filter((q, i) => isOk(q, ms[0].ans[i])).length, c2: ms[1].qs.filter((q, i) => isOk(q, ms[1].ans[i])).length, n1: ms[0].qs.length, n2: ms[1].qs.length };
   };
   if (S.kind === 'full' || S.kind === 'rw') sum.rw = scoreFor('rw');
   if (S.kind === 'full' || S.kind === 'math') sum.math = scoreFor('math');
@@ -361,15 +362,15 @@ UI.reviewItem = (x, idx) => {
 UI.routes.results = (id) => {
   const p = prof(), rec = p.tests.find(r => r.id === id);
   if (!rec) return { html: `<div class="card"><h1>Results not found</h1><p>This session is no longer saved.</p><a class="btn btn-primary" href="#/home">Back home</a></div>` };
-  const qs = recQuestions(rec), s = rec.sum;
+  const qs = recQuestions(rec), s = rec.sum, sc = Engine.EXAMS[s.exam || 'sat'], isPsat = sc.id !== 'sat';
   const byDom = {}; qs.forEach(x => { const d = x.q.dom; (byDom[d] = byDom[d] || { n: 0, ok: 0 }); byDom[d].n++; if (x.ok) byDom[d].ok++; });
   const bySk = {}; qs.forEach(x => { const k = x.q.s; (bySk[k] = bySk[k] || { n: 0, ok: 0, ms: 0 }); bySk[k].n++; if (x.ok) bySk[k].ok++; bySk[k].ms += x.ms || 0; });
   const worst = Object.entries(bySk).filter(([k, v]) => v.n >= 1 && v.ok / v.n < 0.75).sort((a, b) => a[1].ok / a[1].n - b[1].ok / b[1].n).slice(0, 4);
   const doms = Object.keys(byDom).sort((a, b) => DOMAINS[a].sec.localeCompare(DOMAINS[b].sec));
-  const scoreBlock = s.total ? `<div class="score-hero"><div><span class="eyebrow">Estimated score</span><div class="score-big">${s.total}</div><small>out of 1600 · target ${p.target}</small></div>
+  const scoreBlock = s.total ? `<div class="score-hero"><div><span class="eyebrow">Estimated score</span><div class="score-big">${s.total}</div><small>out of ${sc.max}${sc.id === Engine.examOf(p).id ? ` · target ${p.target}` : ''}</small>${isPsat && s.rw && s.math ? `<small class="nm-line">National Merit Selection Index (estimate): <b>${Engine.selectionIndex(s.rw.score, s.math.score)}</b></small>` : ''}</div>
       <div class="score-split"><div><b>${s.rw.score}</b><span>Reading &amp; Writing</span><small>${s.rw.c1}/${s.rw.n1} then ${s.rw.c2}/${s.rw.n2} · ${s.rw.hard ? 'harder' : 'easier'} 2nd module</small></div>
       <div><b>${s.math.score}</b><span>Math</span><small>${s.math.c1}/${s.math.n1} then ${s.math.c2}/${s.math.n2} · ${s.math.hard ? 'harder' : 'easier'} 2nd module</small></div></div></div>`
-    : (s.rw && !s.math) || (s.math && !s.rw) ? (() => { const x = s.rw || s.math; return `<div class="score-hero"><div><span class="eyebrow">Estimated section score</span><div class="score-big">${x.score}</div><small>out of 800 · ${x.hard ? 'second module was harder' : 'second module was easier'}</small></div></div>`; })()
+    : (s.rw && !s.math) || (s.math && !s.rw) ? (() => { const x = s.rw || s.math; return `<div class="score-hero"><div><span class="eyebrow">Estimated section score</span><div class="score-big">${x.score}</div><small>out of ${sc.secMax} · ${x.hard ? 'second module was harder' : 'second module was easier'}</small></div></div>`; })()
     : `<div class="score-hero"><div><span class="eyebrow">${U.esc(rec.title)}</span><div class="score-big">${s.correct}<small class="of">/${s.n}</small></div><small>${U.pct(s.pct)} correct</small></div></div>`;
   const nextSteps = worst.length ? worst.map(([k, v]) => `<div class="step"><div><b>${U.esc(SKILL_BY_ID[k].name)}</b><small>${v.ok}/${v.n} correct this session</small></div><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${k}">${ic('practice', 16)} Practice</button></div>`).join('') : `<p class="hint">No weak spots in this session, keep the streak going.</p>`;
   const html = `<div class="page results">

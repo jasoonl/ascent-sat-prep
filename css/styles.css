@@ -274,3 +274,37 @@ body.focus .side, body.focus .top, body.focus .tabbar { display: none; } body.fo
 @keyframes fade { from { opacity: 0; } } @keyframes pop { from { opacity: 0; transform: scale(.97) translateY(6px); } } @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
 @media print { .side, .top, .tabbar, .btn, .icon-btn, #toasts { display: none !important; } .shell { display: block; } body { background: #fff; color: #000; } .card { box-shadow: none; break-inside: avoid; } .page { padding: 0; } }
+
+/* ---------- scores, scholarship ---------- */
+.lede { font-size: 1.1rem; color: var(--muted); margin: -.5rem 0 1.25rem; max-width: 52ch; }
+.score-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 .75rem; align-items: end; } .score-fields .field { margin-bottom: .5rem; } .score-fields label { min-height: 2.6em; display: flex !important; align-items: flex-end; line-height: 1.25; } .score-fields .inp { text-align: center; font-variant-numeric: tabular-nums; }
+.prior { margin: 0 0 1rem; border: 1px solid var(--border); border-radius: 12px; padding: 0 1rem; background: var(--surface-2); } .prior[open] { padding-bottom: .5rem; background: var(--surface); } .prior > summary { font-weight: 600; } .prior-body { padding-top: .5rem; }
+.act-cell { white-space: nowrap; text-align: right; }
+.legend-chart { display: flex; flex-wrap: wrap; gap: 1rem; color: var(--muted); font-size: .85rem; margin: .5rem 0 0; } .legend-chart span { display: inline-flex; align-items: center; gap: .4rem; }
+.lg-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); display: inline-block; } .lg-dia { width: 10px; height: 10px; background: var(--accent); transform: rotate(45deg); display: inline-block; } .lg-tick { width: 3px; height: 14px; background: var(--text); display: inline-block; border-radius: 2px; }
+.chart .pt.real { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.nm-out { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; margin: .5rem 0 1rem; } @media (max-width: 640px) { .nm-out { grid-template-columns: 1fr; gap: .5rem; } }
+.nm-scale { position: relative; height: 14px; border-radius: 7px; background: var(--surface-3); margin-top: .25rem; } .nm-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--primary); border-radius: 7px; transition: width .35s ease; }
+.nm-tick { position: absolute; top: -5px; width: 3px; height: 24px; background: var(--text); border-radius: 2px; transform: translateX(-1px); } .nm-tick.me { background: var(--accent); width: 4px; }
+.nm-form .inp { max-width: 220px; } .nm-target .inp { max-width: 220px; }
+.phases.tight { gap: .875rem; margin: 0; }
+
+/* ---------- small-screen fixes for tables, charts and segmented controls ---------- */
+.list-table th, .list-table td { overflow-wrap: normal; word-break: normal; }
+.opt { white-space: nowrap; }
+.seg-i span { white-space: nowrap; }
+.prior > summary { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .chart .tick { font-size: 20px; }
+  .seg-i { font-size: .85rem; }
+  .stack-table, .stack-table tbody { display: block; }
+  .stack-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .stack-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1rem; padding: .875rem 0; border-bottom: 1px solid var(--border); }
+  .stack-table tr:last-child { border-bottom: 0; }
+  .stack-table td { display: grid; gap: 2px; border: 0; padding: 0; font-size: .95rem; }
+  .stack-table td::before { content: attr(data-label); font-size: .72rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .stack-table td.c-date, .stack-table td.c-test { font-weight: 650; }
+  .stack-table td.act-cell { grid-column: 1 / -1; display: flex; gap: .5rem; text-align: left; } .stack-table td.act-cell::before { content: none; }
+}
+@media (max-width: 480px) { .field .seg .seg-i { padding: 0 .1rem; font-size: .8rem; } }
+.tbl-wrap > table.list-table:not(.stack-table) { min-width: 480px; }
