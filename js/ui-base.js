@@ -3,7 +3,7 @@
 'use strict';
 const ic = (n, s = 20, cls = '') => `<svg class="ic ${cls}" width="${s}" height="${s}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false">${ICONS[n] || ''}</svg>`;
 
-const UI = window.UI = { ic, routes: {}, acts: {}, ins: {}, cleanup: null, route: { name: '', arg: '' } };
+const UI = window.UI = { ic, routes: {}, acts: {}, ins: {}, afterRender: [], cleanup: null, route: { name: '', arg: '' } };
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 UI.$ = $; UI.$$ = $$;
 
@@ -86,6 +86,7 @@ function shellHTML() {
       <a class="brand" href="#/home">${ic('logo', 26)}<span>Ascent <small>SAT &amp; PSAT Prep</small></span></a>
       <nav class="side-nav">${NAV.map(n => `<a class="nav-item" href="#/${n.id}" data-nav="${n.id}">${ic(n.icon, 20)}<span>${n.label}</span><i class="nav-badge" data-badge="${n.id}" hidden></i></a>`).join('')}</nav>
       <div class="side-foot">
+        <div id="acct-side"></div>
         <button class="who" data-act="switchProfile" aria-label="Switch student profile"><span class="avatar" id="av1"></span><span class="who-t"><b id="whoName"></b><small>Switch student</small></span>${ic('down', 16)}</button>
         <button class="theme-btn" data-act="toggleTheme" aria-label="Toggle light and dark theme">${ic('moon', 18)}<span>Theme</span></button>
       </div>
@@ -93,7 +94,7 @@ function shellHTML() {
     <div class="main">
       <header class="top">
         <a class="brand sm" href="#/home">${ic('logo', 22)}<span>Ascent</span></a>
-        <div class="top-r"><button class="icon-btn" data-act="toggleTheme" aria-label="Toggle light and dark theme">${ic('moon', 20)}</button>
+        <div class="top-r"><span id="acct-top"></span><button class="icon-btn" data-act="toggleTheme" aria-label="Toggle light and dark theme">${ic('moon', 20)}</button>
         <button class="who sm" data-act="switchProfile" aria-label="Switch student profile"><span class="avatar" id="av2"></span></button></div>
       </header>
       <main id="view" tabindex="-1"></main>
@@ -131,6 +132,7 @@ UI.render = function render() {
     const due = Engine.dueMissed(prof).length, b = $('[data-badge="mistakes"]'); if (b) { b.hidden = !due; b.textContent = due; b.setAttribute('aria-label', due + ' due'); }
   }
   if (out.after) out.after(view);
+  (UI.afterRender || []).forEach(f => { try { f(); } catch (e) { /* optional UI */ } });
   if (!out.keepScroll) window.scrollTo(0, 0);
   if (out.title) document.title = out.title + ' · Ascent SAT & PSAT Prep'; else document.title = 'Ascent SAT & PSAT Prep';
   if (!out.noFocus) { try { view.focus({ preventScroll: true }); } catch (e) { } }

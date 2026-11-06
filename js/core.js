@@ -111,7 +111,10 @@ const KEY = 'ascent.sat.v1';
 let state = null, saveTimer = null;
 function blank() { return { v: 1, activeId: null, profiles: {}, settings: { theme: 'auto' }, custom: [], ai: [], aiCfg: { provider: 'gemini', model: '', key: '' } }; }
 function fixProfile(p) { // profiles saved by older versions get the newer fields
-  if (!EXAMS[p.exam]) p.exam = 'sat'; if (!Array.isArray(p.prior)) p.prior = []; if (p.nmTarget == null) p.nmTarget = 0; return p;
+  if (!EXAMS[p.exam]) p.exam = 'sat'; if (!Array.isArray(p.prior)) p.prior = []; if (p.nmTarget == null) p.nmTarget = 0;
+  if (!p.retired) p.retired = {}; if (p.updatedAt == null) p.updatedAt = p.createdAt || 0; if (p.cloudUser === undefined) p.cloudUser = null;
+  ['hist', 'tests'].forEach(k => { if (!Array.isArray(p[k])) p[k] = []; }); ['missed', 'seen', 'flagged', 'doneTasks'].forEach(k => { if (!p[k] || typeof p[k] !== 'object') p[k] = {}; });
+  return p;
 }
 function load() {
   try { const raw = localStorage.getItem(KEY); state = raw ? Object.assign(blank(), JSON.parse(raw)) : blank(); }
@@ -119,7 +122,10 @@ function load() {
   Object.values(state.profiles).forEach(fixProfile);
   return state;
 }
-function save(now) {
+function save(now, opts) {
+  const silent = !!(opts && opts.silent);                       // silent saves (sync merges) must not look like new activity
+  if (!silent && state && state.activeId && state.profiles[state.activeId]) state.profiles[state.activeId].updatedAt = Date.now();
+  if (!silent && Store.onSaved) { try { Store.onSaved(); } catch (e) { /* sync is optional */ } }   // fires at once; the sync itself is debounced
   const run = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { Store.saveError = true; } };
   if (now) { clearTimeout(saveTimer); run(); } else { clearTimeout(saveTimer); saveTimer = setTimeout(run, 150); }
 }
@@ -131,11 +137,12 @@ const Store = {
   create(o) {
     const s = Store.get(), id = U.uid();
     s.profiles[id] = Object.assign({ id, name: 'Student', grade: 11, target: 1300, testDate: '', dailyMin: 30, createdAt: Date.now(),
-      hist: [], missed: {}, flagged: {}, seen: {}, tests: [], session: null, extended: false, showTimer: true, doneTasks: {}, exam: 'sat', prior: [], nmTarget: 0 }, o);
+      hist: [], missed: {}, flagged: {}, seen: {}, tests: [], session: null, extended: false, showTimer: true, doneTasks: {}, exam: 'sat', prior: [], nmTarget: 0, retired: {}, updatedAt: Date.now(), cloudUser: null }, o);
     s.activeId = id; save(true); return s.profiles[id];
   },
   switchTo(id) { const s = Store.get(); if (s.profiles[id]) { s.activeId = id; save(true); } },
   remove(id) { const s = Store.get(); delete s.profiles[id]; if (s.activeId === id) s.activeId = Object.keys(s.profiles)[0] || null; save(true); },
+  fix: p => fixProfile(p),
   exportAll: () => JSON.stringify(Store.get(), null, 1),
   importAll(json) { const o = JSON.parse(json); if (!o || typeof o !== 'object' || !o.profiles) throw new Error('Not an Ascent backup file.'); state = Object.assign(blank(), o); save(true); },
   reset() { state = blank(); save(true); }
@@ -372,7 +379,7 @@ const BOX_DAYS = [1, 3, 7, 14, 30];
 function recordMissed(prof, q, ok, ans) {
   const m = prof.missed[q.id];
   if (!ok) { prof.missed[q.id] = { q, n: (m ? m.n : 0) + 1, box: 0, due: Date.now() + DAY, last: Date.now(), ans }; }
-  else if (m) { m.box++; m.last = Date.now(); if (m.box >= BOX_DAYS.length) delete prof.missed[q.id]; else m.due = Date.now() + BOX_DAYS[m.box] * DAY; }
+  else if (m) { m.box++; m.last = Date.now(); if (m.box >= BOX_DAYS.length) { delete prof.missed[q.id]; (prof.retired = prof.retired || {})[q.id] = Date.now(); } else m.due = Date.now() + BOX_DAYS[m.box] * DAY; }
 }
 function dueMissed(prof) { const now = Date.now(); return Object.values(prof.missed).filter(m => m.due <= now); }
 function recordAnswer(prof, q, ok, ms, mode, ans) {

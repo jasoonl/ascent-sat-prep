@@ -14,10 +14,14 @@ A free, private, no-backend SAT practice site, with PSAT/NMSQT practice and Nati
 - Scholarship page: National Merit Selection Index calculator, state cutoff target, and a plain-language guide to the program (figures sourced from nationalmerit.org; cutoffs are unofficial reports and change every year)
 - ~230 hand-written original questions + 60 procedural math generators (unlimited variants)
 - Import your own question packs (JSON) or generate extra questions with your own AI key (optional)
+- Optional cloud accounts (email and password, or an emailed sign-in link), one per student, so progress follows them between devices. Off until you set it up: see [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
 - Light/dark theme, keyboard accessible, works on phones, installable/offline after first load
 
 ## Run locally
     python3 -m http.server 8000     # then open http://localhost:8000
+
+## Hosting
+The site is plain static files, so it needs **no server of its own**. It is hosted on GitHub Pages. Cloud accounts (optional) use Supabase as a managed backend, which also needs no server from you.
 
 ## Host for free (any static host)
 - **Vercel / Netlify / Cloudflare Pages**: drag-and-drop this folder (no build step).
