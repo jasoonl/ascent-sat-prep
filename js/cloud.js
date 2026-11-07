@@ -35,6 +35,7 @@ function mergeProfiles(local, remote) {
   out.prior = unionById(newer.prior, older.prior).sort((x, y) => (x.date || '').localeCompare(y.date || ''));      // same id on both sides: the newer profile's version wins
   out.tests = unionById(newer.tests, older.tests).sort((x, y) => y.t - x.t).slice(0, 60);
   out.retired = maxMerge(local.retired, remote.retired);
+  out.prior = out.prior.filter(e => !out.retired['score:' + e.id]);                                                  // a deleted score stays deleted
   out.missed = {};
   for (const src of [older.missed || {}, newer.missed || {}]) for (const id in src) { const prev = out.missed[id]; if (!prev || (src[id].last || 0) >= (prev.last || 0)) out.missed[id] = src[id]; }
   for (const id in out.missed) if ((out.retired[id] || 0) >= (out.missed[id].last || 0)) delete out.missed[id];

@@ -16,6 +16,10 @@ m = M(a, b); t('real scores from both devices are kept', m.prior.length === 2 &&
 a = base(); b = base(); a.updatedAt = 50; b.updatedAt = 90; a.prior = [{ id: 's1', total: 1300 }]; b.prior = [{ id: 's1', total: 1310 }];
 t('same score edited on both sides: the newer profile wins', M(a, b).prior[0].total === 1310);
 
+a = base(); b = base(); a.updatedAt = 300; a.retired = { 'score:s9': 250 }; b.prior = [{ id: 's9', exam: 'sat', date: '2026-01-01', total: 1200 }, { id: 's10', exam: 'sat', date: '2026-02-01', total: 1300 }];
+m = M(a, b); t('a deleted real score is not brought back by the other device', !m.prior.some(e => e.id === 's9') && m.prior.some(e => e.id === 's10'));
+a = base(); b = base(); a.prior = [{ id: 's1', total: 1300, date: '2026-01-01' }]; a.updatedAt = 400; b.prior = [{ id: 's1', total: 1290, date: '2026-01-01' }]; b.updatedAt = 100;
+t('a corrected score replaces the old value on the other device', M(a, b).prior[0].total === 1300 && M(b, a).prior[0].total === 1300);
 a = base(); b = base(); b.missed = { q1: { q: { id: 'q1' }, last: 500 } }; a.retired = { q1: 600 }; a.updatedAt = 300;
 t('a mistake retired later is not resurrected by the other device', !('q1' in M(a, b).missed));
 a = base(); b = base(); b.missed = { q1: { q: { id: 'q1' }, last: 900 } }; a.retired = { q1: 600 };

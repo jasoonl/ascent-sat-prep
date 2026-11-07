@@ -96,7 +96,32 @@ UI.acts.addScore = (id) => {
 UI.acts.editScore = id => UI.acts.addScore(id);
 UI.acts.delScore = async (id) => {
   if (!(await UI.confirm('Remove this score from your history?', 'Remove', true))) return;
-  const p = prof(); p.prior = p.prior.filter(x => x.id !== id); Store.save(true); UI.render();
+  const p = prof(); p.prior = p.prior.filter(x => x.id !== id); (p.retired = p.retired || {})['score:' + id] = Date.now();   // remembered so sync cannot bring it back
+  Store.save(true); UI.render();
+};
+
+/* ---------- edit the target score ---------- */
+const GOAL_MIN = { sat: 800, psat: 640, psat10: 640 };
+UI.acts.editGoal = () => {
+  const p = prof(), sc = Engine.examOf(p), lo = GOAL_MIN[sc.id] || 640, hi = sc.max, lvl = Engine.currentLevel(p);
+  const m = UI.modal({ title: 'Edit your goal', body: `<form id="goal-form" novalidate>
+    <div class="field"><label for="goal-n">Target total score (${sc.name})</label>
+      <input id="goal-n" class="inp goal-in" inputmode="numeric" maxlength="4" autocomplete="off" value="${p.target}" aria-describedby="goal-hint goal-err">
+      <input id="goal-r" type="range" min="${lo}" max="${hi}" step="10" value="${U.clamp(p.target, lo, hi)}" aria-label="Target score slider"></div>
+    <p class="hint" id="goal-hint" style="margin-top:0">Type a score or drag the slider. Multiples of 10 from ${lo} to ${hi}.</p>
+    <p class="err" id="goal-err" role="alert" hidden></p><p class="hint" id="goal-gap" role="status"></p>
+    <button class="btn btn-primary block" type="submit" style="margin-top:.75rem">Save goal</button></form>` });
+  const n = $('#goal-n', m.el), r = $('#goal-r', m.el), err = $('#goal-err', m.el), gap = $('#goal-gap', m.el);
+  const valid = v => Number.isInteger(v) && v % 10 === 0 && v >= lo && v <= hi;
+  const note = v => { gap.textContent = lvl.source !== 'none' && valid(v) ? (v > lvl.total ? `That is ${v - lvl.total} points above your ${lvl.source === 'practice' ? 'current estimate' : 'latest real score'} of ${lvl.total}.` : `That is at or below your ${lvl.source === 'practice' ? 'current estimate' : 'latest real score'} of ${lvl.total}.`) : ''; };
+  note(p.target);
+  r.addEventListener('input', () => { n.value = r.value; err.hidden = true; n.removeAttribute('aria-invalid'); note(+r.value); });
+  n.addEventListener('input', () => { err.hidden = true; n.removeAttribute('aria-invalid'); const v = +n.value; if (valid(v)) r.value = v; note(v); });
+  $('#goal-form', m.el).addEventListener('submit', e => {
+    e.preventDefault(); const v = Number(n.value.trim());
+    if (!valid(v)) { err.textContent = `Enter a multiple of 10 from ${lo} to ${hi}.`; err.hidden = false; n.setAttribute('aria-invalid', 'true'); n.focus(); return; }
+    p.target = v; Store.save(true); m.close(); UI.toast(`Goal set to ${v}.`, 'ok'); UI.render();
+  });
 };
 
 /* ---------- My scores ---------- */
@@ -106,7 +131,7 @@ UI.routes.scores = (a, p) => {
   const nmCell = e => (e.exam === 'psat' || e.exam === 'psat10') && e.rw != null && e.math != null ? `<b>${Engine.selectionIndex(e.rw, e.math)}</b>` : '-';
   const row = e => `<tr><td data-label="Date" class="c-date">${fmtDay(e.date)}</td><td data-label="Test" class="c-test">${E[e.exam].name}</td><td data-label="Total"><b>${e.total}</b> <small>/${E[e.exam].max}</small></td><td data-label="Reading &amp; Writing">${e.rw != null ? e.rw : '-'}</td><td data-label="Math">${e.math != null ? e.math : '-'}</td><td data-label="NM index">${nmCell(e)}</td><td class="act-cell"><button class="btn btn-ghost sm" data-act="editScore" data-arg="${e.id}">Edit</button> <button class="btn btn-danger-ghost sm" data-act="delScore" data-arg="${e.id}" aria-label="Remove score from ${fmtDay(e.date)}">${ic('trash', 16)}</button></td></tr>`;
   const conv = latest && latest.exam !== sc.id ? (() => { const v = Engine.inProfileScale(p, latest); return `<p class="hint">Your latest ${E[latest.exam].name} score is about <b>${v.total}</b> on the ${sc.name} scale. Conversions are approximate: PSAT section scores run about 40 points below the SAT on the same skills.</p>`; })() : '';
-  const html = `<div class="page">${pageHead('My scores', 'Real scores from SAT and PSAT tests you have taken.', `<button class="btn btn-primary" data-act="addScore">${ic('plus', 16)} Add a score</button>`)}
+  const html = `<div class="page">${pageHead('My scores', 'Real scores from SAT and PSAT tests you have taken. Use Edit on any row to correct it.', `<button class="btn btn-ghost" data-act="editGoal">${ic('target', 16)} Goal ${p.target}</button><button class="btn btn-primary" data-act="addScore">${ic('plus', 16)} Add a score</button>`)}
     ${list.length ? `<section class="card"><div class="tbl-wrap"><table class="list-table stack-table"><thead><tr><th scope="col">Date</th><th scope="col">Test</th><th scope="col">Total</th><th scope="col">Reading &amp; Writing</th><th scope="col">Math</th><th scope="col" title="National Merit Selection Index, PSAT/NMSQT and PSAT 10 only">NM index</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>${conv}</section>
       ${list.length > 1 ? `<section class="card"><div class="card-head"><h2>Score trend</h2></div>${UI.lineChart(pts, p.target, sc)}</section>` : ''}`
       : `<div class="empty-state">${ic('trophy', 40)}<h2>No real scores yet</h2><p>If you have taken the SAT, PSAT/NMSQT, PSAT 10 or PSAT 8/9, add the result. Practice will start at the right level and your plan will know the gap to your goal.</p><button class="btn btn-primary" data-act="addScore">${ic('plus', 16)} Add your first score</button></div>`}
