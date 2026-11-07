@@ -1,6 +1,6 @@
 // Node harness: stress-tests every procedural template for malformed output.
 global.window = global;
-require('../js/skills.js'); require('../js/gen.js');
+require('../js/skills.js'); require('../js/gen.js'); require('../js/gen-math2.js'); try { require('../js/gen-rw.js'); } catch (e) { if (!/Cannot find/.test(e.message)) throw e; }
 const bad = []; let total = 0;
 const re = /NaN|undefined|Infinity|\[object/;
 for (const sk of window.Gen.skills()) {

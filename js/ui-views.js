@@ -32,11 +32,13 @@ UI.routes.home = (a, p) => {
   const gapText = lvl.total != null ? (lvl.total >= p.target ? `You are at your ${p.target} goal. Aim higher or lock it in with timed tests.` : `${p.target - lvl.total} points to your ${p.target} goal.`) : '';
   const scoreCard = lvl.source !== 'none' ? `<div class="score-mini"><div class="sm-top">${ringTo}
       <div class="sm-r"><div><b>${lvl.rw}</b><span>Reading &amp; Writing</span></div><div><b>${lvl.math}</b><span>Math</span></div></div></div>
-      <p class="hint">${gapText} ${lvl.source === 'practice' ? `Estimated from ${est.n} practice questions.` : `From your ${E[lvl.entry.exam].name} on ${new Date(lvl.entry.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}. Practice will refine this.`}</p><div class="link-row"><button class="link" data-act="editGoal">Edit goal</button>${lvl.source === 'real' ? `<button class="link" data-act="editScore" data-arg="${lvl.entry.id}">Edit score</button>` : ''}</div></div>`
+      ${UI.homeDelta(p) ? `<p class="sm-delta">${UI.homeDelta(p)}</p>` : ''}<p class="hint">${gapText} ${lvl.source === 'practice' ? `Estimated from ${est.n} practice questions.` : `From your ${E[lvl.entry.exam].name} on ${new Date(lvl.entry.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}. Practice will refine this.`}</p><div class="link-row"><button class="link" data-act="editGoal">Edit goal</button>${lvl.source === 'real' ? `<button class="link" data-act="editScore" data-arg="${lvl.entry.id}">Edit score</button>` : ''}</div></div>`
     : `<div class="score-mini"><div class="sm-top">${UI.ring(U.clamp(est.n / 40, 0, 1), 104, est.n + '/40', 'questions')}<div class="sm-r"><p>Answer about <b>40 questions</b> to unlock your score estimate and weak-spot analysis, or <button class="link" data-act="addScore">add a real score</button>.</p></div></div></div>`;
   const priorPrompt = p.prior.length ? '' : `<div class="banner soft">${ic('trophy', 20)}<div><b>Taken the SAT or PSAT before?</b><span>Add your score so practice starts at the right level and your plan knows the gap to your goal.</span></div><button class="btn btn-soft sm" data-act="addScore">Add a score</button></div>`;
   const nm = sc.id !== 'sat' ? Engine.nmEstimate(p) : null;
   const focusHTML = an.focus.length ? an.focus.map(x => `<div class="step"><div class="step-t"><b>${esc(x.skill.name)}</b><small>${esc(DOMAINS[x.skill.dom].short)} · ${esc(Engine.reasonFor(x))}</small>${UI.bar(x.m, UI.masteryClass(x.m, x.n), x.skill.name + ' mastery')}</div><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${x.skill.id}">${ic('practice', 16)} Practice</button></div>`).join('')
+    : Engine.reportFocus(p).length ? Engine.reportFocus(p).slice(0, 3).map(f => `<div class="step"><div class="step-t"><b>${esc(DOMAINS[f.dom].name)}</b><small>Band ${f.band} of 7 on your ${E[f.entry.exam].name} score report</small>${UI.bandBar(f.band, 0, DOMAINS[f.dom].name)}</div><button class="btn btn-soft sm" data-act="practiceDomain" data-arg="${f.dom}">${ic('practice', 16)} Practice</button></div>`).join('') + '<p class="hint">From your score report. Practice will refine this.</p>'
+    : priorAllTop(p) ? `<p class="empty">Every knowledge and skills band on your score report is 7 of 7. Work on timing with full-length tests and on the hardest questions.</p>`
     : `<p class="empty">${first ? 'Take the diagnostic and your weakest skills will show up here.' : 'No clear weak spots yet. Keep practicing across different skills.'}</p>`;
   const stepsHTML = `<section class="card"><h2>How this works</h2><ol class="steps"><li><b>1. Take the diagnostic</b><span>About 27 questions, one per skill, so we can see where you stand.</span></li><li><b>2. See your weak spots</b><span>Your results rank every skill and show what to practice first.</span></li><li><b>3. Follow your daily plan</b><span>Short sessions that adapt as you improve, plus a notebook for every miss.</span></li></ol></section>`;
   const html = `<div class="page">
@@ -53,7 +55,7 @@ UI.routes.home = (a, p) => {
       <section class="card"><div class="card-head"><h2>Mistake notebook</h2></div><div class="big-n">${Object.keys(p.missed).length}<small>saved</small></div><p class="sub">${due ? `<b>${due}</b> ${due === 1 ? 'is' : 'are'} due for review now.` : 'Nothing due right now.'}</p>
         <div class="row"><button class="btn btn-soft" data-act="reviewDue" ${due ? '' : 'disabled'}>${ic('refresh', 16)} Review due</button><a class="btn btn-ghost" href="#/mistakes">Open</a></div></section>
     </div>
-    ${first ? stepsHTML : `<div class="grid2">
+    ${first && !Engine.reportFocus(p).length && !priorAllTop(p) ? stepsHTML : `<div class="grid2">
       <section class="card"><div class="card-head"><h2>Where to focus</h2><a class="link" href="#/progress">All skills ${ic('right', 14)}</a></div>${focusHTML}
         ${an.unassessed.length && !first ? `<p class="hint">${an.unassessed.length} skills have too few questions to judge yet.</p>` : ''}</section>
       <section class="card"><div class="card-head"><h2>Last 14 days</h2></div><div class="spark" role="img" aria-label="Questions answered per day for the last 14 days">${act.map(d => `<div class="spark-c" title="${d.key}: ${d.n} questions"><i style="height:${Math.max(4, Math.round(d.n / maxAct * 100))}%" class="${d.n ? 'on' : ''}"></i><small>${'SMTWTFS'[d.dow]}</small></div>`).join('')}</div>
@@ -147,43 +149,49 @@ UI.acts.mDelete = (id) => { const p = prof(); delete p.missed[id]; (p.retired = 
 UI.acts.reviewAll = () => UI.confirmStart(() => UI.startReview(false));
 
 /* =================== PROGRESS =================== */
+const priorAllTop = p => { const e = Engine.priorScores(p).find(x => x.domains && Object.keys(x.domains).length); return !!e && Object.keys(e.domains).length === 8 && Object.values(e.domains).every(b => b === 7); };
+UI.acts.practiceDomain = dom => UI.quickSet({ title: DOMAINS[dom].name + ' practice', skills: SKILLS.filter(s => s.dom === dom).map(s => s.id), n: 10, diff: 'adaptive', back: '/home' });
 UI.lineChart = function (points, target, sc) {
   sc = sc || Engine.EXAMS.sat;
   if (points.length < 2) return `<p class="empty">Add a real score and finish a full-length test, or add two scores, to see your trend.</p>`;
-  const W = 640, H = 250, l = 48, r = 28, t = 16, b = 36, pw = W - l - r, ph = H - t - b;
-  const vals = points.map(p => p.v).concat(target ? [target] : []);
+  const W = 640, H = 250, l = 64, r = 28, t = 16, b = 36, pw = W - l - r, ph = H - t - b;
+  const vals = points.map(p => p.v).concat(points.filter(p => p.lo != null).map(p => p.lo), points.filter(p => p.hi != null).map(p => p.hi), target ? [target] : []);
   let min = Math.max(sc.min, Math.floor((Math.min(...vals) - 100) / 100) * 100), max = Math.min(sc.max, Math.ceil((Math.max(...vals) + 100) / 100) * 100);
   if (max - min < 300) { const mid = (max + min) / 2; min = Math.max(sc.min, Math.round((mid - 150) / 100) * 100); max = Math.min(sc.max, min + 300); min = Math.max(sc.min, max - 300); }
   const X = i => l + i / (points.length - 1) * pw, Y = v => t + ph - U.clamp((v - min) / (max - min), 0, 1) * ph;
   const ticks = [0, 1, 2, 3].map(i => Math.round((min + (max - min) * i / 3) / 10) * 10);
   let s = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Scores over time: ${points.map(p => (p.k === 'real' ? 'real test ' : 'practice test ') + p.v + ' on ' + p.d).join(', ')}">`;
   ticks.forEach(v => { s += `<line class="grid" x1="${l}" x2="${W - r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tick" x="${l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; });
-  if (target) s += `<line class="target" x1="${l}" x2="${W - r}" y1="${Y(target)}" y2="${Y(target)}"/><text class="tick tgt" x="${l + 4}" y="${Y(target) + 14}">Goal ${target}</text>`;
+  if (target) s += `<line class="target" x1="${l}" x2="${W - r}" y1="${Y(target)}" y2="${Y(target)}"/><text class="tick tgt" x="${l + pw / 2}" y="${Y(target) + (Y(target) > t + ph - 20 ? -6 : 14)}" text-anchor="middle">Goal ${target}</text>`;
   s += `<polyline class="ln" points="${points.map((p, i) => X(i) + ',' + Y(p.v)).join(' ')}"/>`;
   points.forEach((p, i) => {
-    const x = X(i), y = Y(p.v), tip = `<title>${p.k === 'real' ? 'Real ' + (p.label || 'test') : 'Practice test'}: ${p.v} on ${p.d}</title>`;
+    const x = X(i), y = Y(p.v), tip = `<title>${p.k === 'real' ? 'Real ' + (p.label || 'test') : 'Practice test'}: ${p.v}${p.lo != null ? ` (range ${p.lo} to ${p.hi})` : ''} on ${p.d}</title>`;
+    if (p.lo != null && p.hi != null) s += `<line class="whisk" x1="${x}" x2="${x}" y1="${Y(p.hi)}" y2="${Y(p.lo)}"/><line class="whisk" x1="${x - 5}" x2="${x + 5}" y1="${Y(p.hi)}" y2="${Y(p.hi)}"/><line class="whisk" x1="${x - 5}" x2="${x + 5}" y1="${Y(p.lo)}" y2="${Y(p.lo)}"/>`;
     s += p.k === 'real' ? `<rect class="pt real" x="${x - 6}" y="${y - 6}" width="12" height="12" transform="rotate(45 ${x} ${y})">${tip}</rect>` : `<circle class="pt" cx="${x}" cy="${y}" r="5">${tip}</circle>`;
     const anchor = i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle', ax = i === 0 ? x - 6 : i === points.length - 1 ? x + 6 : x;
-    s += `<text class="tick" x="${ax}" y="${y - 12}" text-anchor="${anchor}">${p.v}</text><text class="tick" x="${ax}" y="${H - 12}" text-anchor="${anchor}">${p.d}</text>`;
+    const ly = p.hi != null ? Y(p.hi) - 8 : y - 12;
+    s += `<text class="tick val" x="${ax}" y="${ly}" text-anchor="${anchor}">${p.v}</text><text class="tick" x="${ax}" y="${H - 12}" text-anchor="${anchor}">${p.d}</text>`;
   });
-  return s + `</svg><p class="legend-chart"><span><i class="lg-dot"></i> Practice test</span><span><i class="lg-dia"></i> Real test</span></p>`;
+  return s + `</svg><p class="legend-chart"><span><i class="lg-dot"></i> Practice test</span><span><i class="lg-dia"></i> Real test</span>${points.some(p => p.lo != null) ? '<span><i class="lg-whisk"></i> Score range from the report</span>' : ''}</p>`;
 };
 UI.routes.progress = (a, p) => {
   const sc = Engine.examOf(p), E = Engine.EXAMS, an = Engine.analyze(p), est = Engine.estimate(p);
   const fmtD = t => UI.fmtDate(t);
   const pts = p.tests.filter(t => t.sum && t.sum.total).map(t => ({ t: t.t, v: U.clamp(t.sum.total + 2 * (E[t.sum.exam || 'sat'].offset - sc.offset), sc.min, sc.max), d: fmtD(t.t), k: 'practice' }))
-    .concat(Engine.priorScores(p).map(e => ({ t: new Date(e.date + 'T00:00:00').getTime(), v: Engine.inProfileScale(p, e).total, d: fmtD(new Date(e.date + 'T00:00:00').getTime()), k: 'real', label: E[e.exam].name })))
+    .concat(Engine.priorScores(p).map(e => ({ t: new Date(e.date + 'T00:00:00').getTime(), v: Engine.inProfileScale(p, e).total, lo: e.ranges && e.ranges.total ? U.clamp(e.ranges.total[0], sc.min, sc.max) : null, hi: e.ranges && e.ranges.total ? U.clamp(e.ranges.total[1], sc.min, sc.max) : null, d: fmtD(new Date(e.date + 'T00:00:00').getTime()), k: 'real', label: E[e.exam].name })))
     .sort((x, y) => x.t - y.t);
   const pace = sec => { const b = an.bySec[sec]; return b.ms.length ? Math.round(U.median(b.ms) / 1000) : null; };
   const dRow = (d, l) => { const [ok, n] = an.byDiff[d]; return `<div class="rowbar"><span class="rb-l">${l}</span>${UI.bar(n ? ok / n : 0, n ? UI.masteryClass(ok / n, 9) : 'na', l + ' accuracy')}<span class="rb-v">${n ? Math.round(ok / n * 100) + '%' : '-'} <small>(${n})</small></span></div>`; };
   const domBlock = d => { const sk = an.list.filter(x => x.skill.dom === d.id); const avg = sk.reduce((s, x) => s + x.m, 0) / sk.length;
-    return `<div class="dom-card"><div class="dom-t"><b>${d.name}</b><small>${SEC_LABEL[d.sec]} · ~${Math.round(d.w * 100)}% of the section</small></div>${sk.map(x => `<div class="skrow"><div class="skrow-t"><span>${esc(x.skill.name)}</span><small>${x.n >= 1 ? Math.round(x.m * 100) + '% mastery · ' + x.ok + '/' + x.n + (x.n < 3 ? ' (early read)' : '') : 'not assessed yet'}</small></div>${UI.bar(x.n >= 1 ? x.m : 0, UI.masteryClass(x.m, x.n), x.skill.name + ' mastery')}<span class="tag ${UI.masteryClass(x.m, x.n)}">${UI.masteryLabel(x.m, x.n)}</span><button class="icon-btn sm" data-act="practiceSkill" data-arg="${x.skill.id}" aria-label="Practice ${esc(x.skill.name)}">${ic('play', 16)}</button></div>`).join('')}</div>`; };
+    return `<div class="dom-card"><div class="dom-t"><b>${d.name}</b><small>${SEC_LABEL[d.sec]} · ${UI.domInfo(d.id, sc.id)}</small></div>${sk.map(x => `<div class="skrow"><div class="skrow-t"><span>${esc(x.skill.name)}</span><small>${x.n >= 1 ? Math.round(x.m * 100) + '% mastery · ' + x.ok + '/' + x.n + (x.n < 3 ? ' (early read)' : '') : 'not assessed yet'}</small></div>${UI.bar(x.n >= 1 ? x.m : 0, UI.masteryClass(x.m, x.n), x.skill.name + ' mastery')}<span class="tag ${UI.masteryClass(x.m, x.n)}">${UI.masteryLabel(x.m, x.n)}</span><button class="icon-btn sm" data-act="practiceSkill" data-arg="${x.skill.id}" aria-label="Practice ${esc(x.skill.name)}">${ic('play', 16)}</button></div>`).join('')}</div>`; };
   const html = `<div class="page">${pageHead('Progress', `${p.hist.length} questions answered · ${UI.plural(p.tests.length, 'session')}`)}
     <div class="grid3">
       <section class="card stat"><span class="eyebrow">Estimated total</span><div class="big-n">${est.enough ? est.total : '-'}<small>/${sc.max}</small></div><p class="hint">${est.enough ? `Goal ${p.target}. Rough estimate from practice accuracy; full tests are the better measure.` : 'Answer more questions in both sections to unlock this.'}</p></section>
       <section class="card stat"><span class="eyebrow">Reading &amp; Writing</span><div class="big-n">${est.rwN >= 8 ? est.rw : '-'}<small>/${sc.secMax}</small></div><p class="hint">Median ${pace('rw') ? pace('rw') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.rw / 1000)}s)</p></section>
       <section class="card stat"><span class="eyebrow">Math</span><div class="big-n">${est.mathN >= 8 ? est.math : '-'}<small>/${sc.secMax}</small></div><p class="hint">Median ${pace('math') ? pace('math') + 's' : '-'} per question (test pace ${Math.round(Engine.TARGET_MS.math / 1000)}s)</p></section></div>
+    ${UI.improveCard(p)}
     <section class="card"><div class="card-head"><h2>Real and practice test scores</h2><span><button class="link" data-act="editGoal">Goal ${p.target}: edit</button> <a class="link" href="#/scores">Edit real scores</a></span></div>${UI.lineChart(pts, p.target, sc)}</section>
+    ${UI.reportCard(p)}
     <section class="card"><div class="card-head"><h2>Skill by skill</h2><span class="hint">Mastery is a rolling estimate that weights recent answers and question difficulty.</span></div><div class="dom-grid">${Object.values(DOMAINS).map(domBlock).join('')}</div></section>
     <div class="grid2"><section class="card"><h2>Accuracy by difficulty</h2><div class="stack">${dRow(1, 'Easy')}${dRow(2, 'Medium')}${dRow(3, 'Hard')}</div><p class="hint">Missing easy questions points to a rule or formula gap. Missing only hard ones is a good place to be.</p></section>
       <section class="card"><h2>What the data says</h2>${an.notes.length || an.focus.length ? `${an.focus.slice(0, 3).map(x => `<div class="note">${ic('target', 18)}<p><b>${esc(x.skill.name)}</b>: ${esc(Engine.reasonFor(x))}.</p></div>`).join('')}${an.notes.map(n => `<div class="note ${n.k === 'up' ? 'ok' : ''}">${ic(n.k === 'up' ? 'trophy' : 'bulb', 18)}<p>${esc(n.t)}</p></div>`).join('')}` : '<p class="empty">Insights show up after about 30 questions.</p>'}</section></div></div>`;
@@ -221,9 +229,10 @@ UI.routes.skills = (a, p) => {
   const st = Engine.skillStats(p), list = SKILLS.filter(s => UI.skillFilter === 'all' || s.sec === UI.skillFilter);
   const html = `<div class="page">${pageHead('Skill guide', 'What each skill tests, the strategy that works, and your current level.')}
     <div class="chips-row" role="group" aria-label="Filter by section">${[['all', 'All skills'], ['rw', 'Reading & Writing'], ['math', 'Math']].map(([k, l]) => `<button class="chip ${UI.skillFilter === k ? 'on' : ''}" aria-pressed="${UI.skillFilter === k}" data-act="skFilter" data-arg="${k}">${l}</button>`).join('')}</div>
-    <div class="skill-grid">${list.map(s => { const x = st[s.id], n = Bank.staticCount(s.id); return `<article class="card skill-card"><div class="card-head"><div><span class="eyebrow">${esc(DOMAINS[s.dom].name)}</span><h2>${esc(s.name)}</h2></div><span class="tag ${UI.masteryClass(x.m, x.n)}">${UI.masteryLabel(x.m, x.n)}</span></div>
+    ${['rw', 'math'].filter(sec => UI.skillFilter === 'all' || UI.skillFilter === sec).map(sec => `<h2 class="sec-h">${sec === 'rw' ? 'Reading and Writing' : 'Math'}</h2>${Object.values(DOMAINS).filter(d => d.sec === sec).map(d => `<section class="dom-group"><div class="dom-gh"><h3>${esc(d.name)}</h3><small>${UI.domInfo(d.id, Engine.examOf(p).id)} on the ${Engine.examOf(p).name}</small></div>
+    <div class="skill-grid">${list.filter(s => s.dom === d.id).map(s => { const x = st[s.id], n = Bank.staticCount(s.id); return `<article class="card skill-card"><div class="card-head"><div><span class="eyebrow">${esc(DOMAINS[s.dom].name)}</span><h4>${esc(s.name)}</h4></div><span class="tag ${UI.masteryClass(x.m, x.n)}">${UI.masteryLabel(x.m, x.n)}</span></div>
       ${UI.bar(x.n >= 1 ? x.m : 0, UI.masteryClass(x.m, x.n), s.name + ' mastery')}<p class="tipt">${ic('bulb', 18)}<span>${esc(s.tip)}</span></p>
-      <div class="skill-foot"><small>${n} written question${n === 1 ? '' : 's'}${Gen.has(s.id) ? ' + unlimited generated' : ''}</small><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${s.id}">${ic('play', 16)} Practice 10</button></div></article>`; }).join('')}</div></div>`;
+      <div class="skill-foot"><small>${n} written question${n === 1 ? '' : 's'}${Gen.has(s.id) ? ' + unlimited generated' : ''}</small><button class="btn btn-soft sm" data-act="practiceSkill" data-arg="${s.id}">${ic('play', 16)} Practice 10</button></div></article>`; }).join('')}</div></section>`).join('')}`).join('')}</div>`;
   return { html, title: 'Skill guide' };
 };
 UI.acts.skFilter = (k) => { UI.skillFilter = k; UI.render(); };

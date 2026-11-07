@@ -15,9 +15,9 @@ UI.scoreForm = (pre, o = {}) => {
     <div class="field"><label for="${pre}-date">Date taken</label><input id="${pre}-date" class="inp" type="date" max="${U.today()}" value="${o.date || ''}" aria-describedby="${pre}-e-date"><p class="err" id="${pre}-e-date" role="alert" hidden></p></div></div>
     <div class="score-fields">${field('rw', 'Reading &amp; Writing', o.rw, `${ex.secMin} to ${ex.secMax}`)}${field('math', 'Math', o.math, `${ex.secMin} to ${ex.secMax}`)}${field('total', 'Total', o.total, `${ex.min} to ${ex.max}`)}</div>
     <p class="err" id="${pre}-e-fields" role="alert" hidden></p>
-    <p class="hint" id="${pre}-hint">${hintFor(o.exam || 'sat')}</p>`;
+    <p class="hint" id="${pre}-hint">${hintFor(o.exam || 'sat')}</p>${UI.reportFields(pre, o)}`;
 };
-const readForm = pre => ({ exam: $(`#${pre}-exam`).value, date: $(`#${pre}-date`).value, rw: $(`#${pre}-rw`).value.trim(), math: $(`#${pre}-math`).value.trim(), total: $(`#${pre}-total`).value.trim() });
+const readForm = pre => Object.assign({ exam: $(`#${pre}-exam`).value, date: $(`#${pre}-date`).value, rw: $(`#${pre}-rw`).value.trim(), math: $(`#${pre}-math`).value.trim(), total: $(`#${pre}-total`).value.trim() }, UI.readReport(pre));
 function showErrors(pre, err) {
   ['exam', 'date', 'rw', 'math', 'total'].forEach(k => { const i = $(`#${pre}-${k}`); if (i) i.removeAttribute('aria-invalid'); });
   const dm = $(`#${pre}-e-date`), fm = $(`#${pre}-e-fields`); dm.hidden = true; dm.textContent = ''; fm.hidden = true; fm.textContent = '';
@@ -27,11 +27,13 @@ function showErrors(pre, err) {
     if (k === 'date') { dm.textContent = err[k]; dm.hidden = false; } else if (k !== 'exam') fieldMsgs.push(err[k]);
   });
   if (fieldMsgs.length) { fm.textContent = fieldMsgs.join(' '); fm.hidden = false; }
+  if (UI.showReportErrors(pre, err) && !first) first = $(`#${pre}-rep summary`);
   if (first) first.focus();
 }
 UI.ins.scoreExam = (v, el) => {
   const pre = el.dataset.prefix, e = E[v]; $(`#${pre}-hint`).textContent = hintFor(v);
   ['rw', 'math'].forEach(k => { $(`#${pre}-${k}`).placeholder = `${e.secMin} to ${e.secMax}`; }); $(`#${pre}-total`).placeholder = `${e.min} to ${e.max}`;
+  UI.updateReportLabels(pre, v);
 };
 UI.ins.scoreSec = (v, el) => {
   const pre = el.dataset.prefix, rw = +$(`#${pre}-rw`).value, m = +$(`#${pre}-math`).value, t = $(`#${pre}-total`);
@@ -69,7 +71,7 @@ UI.routes.welcome = () => {
       e.preventDefault(); const name = $('#w-name').value.trim();
       if (!name) { $('#w-err').hidden = false; $('#w-name').setAttribute('aria-invalid', 'true'); $('#w-name').focus(); return; }
       let prior = null; const f = readForm('w');
-      if (f.rw || f.math || f.total) { const v = Engine.validateScore(f); if (!v.ok) { $('#w-prior').open = true; showErrors('w', v.err); return; } prior = v.entry; }
+      if (f.rw || f.math || f.total || f.grade || Object.keys(f.domains || {}).length) { const v = Engine.validateScore(f); if (!v.ok) { $('#w-prior').open = true; showErrors('w', v.err); return; } prior = v.entry; }
       const p = Store.create({ name, grade: +$('#w-grade').value, exam: $('input[name="w-exam"]:checked').value, target: +$('#w-target').value, testDate: $('#w-testdate').value, dailyMin: +$('input[name="w-min"]:checked').value });
       if (prior) { p.prior.push(prior); Store.save(true); }
       if (window.Cloud && Cloud.user && !Cloud.boundProfile()) Cloud.linkActive();
@@ -89,7 +91,7 @@ UI.acts.addScore = (id) => {
     actions: [{ label: 'Cancel', cls: 'btn-ghost' }, { label: 'Save score', cls: 'btn-primary', fn: () => {
       const v = Engine.validateScore(Object.assign(readForm('sc'), existing ? { id: existing.id } : {}));
       if (!v.ok) { showErrors('sc', v.err); return false; }
-      if (existing) Object.assign(existing, v.entry); else p.prior.push(v.entry);
+      if (existing) p.prior[p.prior.indexOf(existing)] = v.entry; else p.prior.push(v.entry);   // replace, so cleared report fields are really removed
       Store.save(true); UI.toast('Score saved.', 'ok'); setTimeout(() => UI.render(), 0); return true;
     } }] });
 };
@@ -127,12 +129,13 @@ UI.acts.editGoal = () => {
 /* ---------- My scores ---------- */
 UI.routes.scores = (a, p) => {
   const list = Engine.priorScores(p), sc = Engine.examOf(p), latest = list[0];
-  const pts = list.slice().reverse().map(e => ({ t: 0, v: Engine.inProfileScale(p, e).total, d: UI.fmtDate(new Date(e.date + 'T00:00:00').getTime()), k: 'real', label: E[e.exam].name }));
+  const pts = list.slice().reverse().map(e => ({ t: 0, v: Engine.inProfileScale(p, e).total, lo: e.ranges && e.ranges.total ? U.clamp(e.ranges.total[0], sc.min, sc.max) : null, hi: e.ranges && e.ranges.total ? U.clamp(e.ranges.total[1], sc.min, sc.max) : null, d: UI.fmtDate(new Date(e.date + 'T00:00:00').getTime()), k: 'real', label: E[e.exam].name }));
   const nmCell = e => (e.exam === 'psat' || e.exam === 'psat10') && e.rw != null && e.math != null ? `<b>${Engine.selectionIndex(e.rw, e.math)}</b>` : '-';
-  const row = e => `<tr><td data-label="Date" class="c-date">${fmtDay(e.date)}</td><td data-label="Test" class="c-test">${E[e.exam].name}</td><td data-label="Total"><b>${e.total}</b> <small>/${E[e.exam].max}</small></td><td data-label="Reading &amp; Writing">${e.rw != null ? e.rw : '-'}</td><td data-label="Math">${e.math != null ? e.math : '-'}</td><td data-label="NM index">${nmCell(e)}</td><td class="act-cell"><button class="btn btn-ghost sm" data-act="editScore" data-arg="${e.id}">Edit</button> <button class="btn btn-danger-ghost sm" data-act="delScore" data-arg="${e.id}" aria-label="Remove score from ${fmtDay(e.date)}">${ic('trash', 16)}</button></td></tr>`;
-  const conv = latest && latest.exam !== sc.id ? (() => { const v = Engine.inProfileScale(p, latest); return `<p class="hint">Your latest ${E[latest.exam].name} score is about <b>${v.total}</b> on the ${sc.name} scale. Conversions are approximate: PSAT section scores run about 40 points below the SAT on the same skills.</p>`; })() : '';
+  const row = e => `<tr><td data-label="Date" class="c-date">${fmtDay(e.date)}</td><td data-label="Test" class="c-test">${E[e.exam].name}</td><td data-label="Total"><b>${e.total}</b> <small>/${E[e.exam].max}</small>${UI.rangeText(e) ? `<small class="rng">range ${UI.rangeText(e)}</small>` : ''}${e.grade ? `<small class="rng">${e.grade}th grade</small>` : ''}${UI.benchBadges(e) ? `<span class="chips">${UI.benchBadges(e)}</span>` : ''}</td><td data-label="Reading &amp; Writing">${e.rw != null ? e.rw : '-'}</td><td data-label="Math">${e.math != null ? e.math : '-'}</td><td data-label="NM index">${nmCell(e)}</td><td class="act-cell"><button class="btn btn-ghost sm" data-act="editScore" data-arg="${e.id}">Edit</button> <button class="btn btn-danger-ghost sm" data-act="delScore" data-arg="${e.id}" aria-label="Remove score from ${fmtDay(e.date)}">${ic('trash', 16)}</button></td></tr>`;
+  const conv = latest && latest.exam !== sc.id ? (() => { const v = Engine.inProfileScale(p, latest); return `<p class="hint">Your latest ${E[latest.exam].name} score is <b>${v.total}</b> on the ${sc.name} scale. The SAT and the PSATs share one score scale, so the numbers carry over directly; the PSATs just top out lower (760 per section on the PSAT/NMSQT and PSAT 10).</p>`; })() : '';
   const html = `<div class="page">${pageHead('My scores', 'Real scores from SAT and PSAT tests you have taken. Use Edit on any row to correct it.', `<button class="btn btn-ghost" data-act="editGoal">${ic('target', 16)} Goal ${p.target}</button><button class="btn btn-primary" data-act="addScore">${ic('plus', 16)} Add a score</button>`)}
     ${list.length ? `<section class="card"><div class="tbl-wrap"><table class="list-table stack-table"><thead><tr><th scope="col">Date</th><th scope="col">Test</th><th scope="col">Total</th><th scope="col">Reading &amp; Writing</th><th scope="col">Math</th><th scope="col" title="National Merit Selection Index, PSAT/NMSQT and PSAT 10 only">NM index</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>${conv}</section>
+      ${UI.improveCard(p, true)}${UI.reportCard(p)}
       ${list.length > 1 ? `<section class="card"><div class="card-head"><h2>Score trend</h2></div>${UI.lineChart(pts, p.target, sc)}</section>` : ''}`
       : `<div class="empty-state">${ic('trophy', 40)}<h2>No real scores yet</h2><p>If you have taken the SAT, PSAT/NMSQT, PSAT 10 or PSAT 8/9, add the result. Practice will start at the right level and your plan will know the gap to your goal.</p><button class="btn btn-primary" data-act="addScore">${ic('plus', 16)} Add your first score</button></div>`}
     <section class="card"><h2>How your scores are used</h2><ul class="plain-list tips"><li><b>Starting level.</b> Until you have answered enough practice questions, your latest real score decides how hard your first questions are.</li><li><b>Plan and goal.</b> The gap between your latest score and your target sets your study plan, and the weaker section is flagged.</li><li><b>Scholarship tracking.</b> PSAT/NMSQT scores with both sections give a National Merit Selection Index. See <a href="#/scholarship">Scholarship</a>.</li><li><b>Stays private.</b> Scores are saved only in this browser. Download a backup in Settings to keep them safe.</li></ul></section></div>`;
@@ -153,12 +156,13 @@ UI.routes.scholarship = (a, p) => {
   const latestPsat = Engine.priorScores(p).find(e => (e.exam === 'psat' || e.exam === 'psat10') && e.rw != null && e.math != null);
   const start = latestPsat ? { rw: latestPsat.rw, math: latestPsat.math, src: `From your ${E[latestPsat.exam].name} on ${fmtDay(latestPsat.date)}` } : nm ? { rw: nm.rw, math: nm.math, src: nm.source === 'practice' ? 'Estimated from your practice. A rough guide only.' : 'Converted from your latest real score. A rough guide only.' } : { rw: '', math: '', src: 'Enter your PSAT/NMSQT section scores, or practice to get an estimate.' };
   const r0 = start.rw === '' ? { ok: false } : nmReadout(+start.rw, +start.math, tgt);
+  const g10 = latestPsat && latestPsat.exam === 'psat' && latestPsat.grade && latestPsat.grade < 11 ? `<p class="note-inline">${ic('info', 18)}<span>Your PSAT/NMSQT from ${fmtDay(latestPsat.date)} was taken in ${latestPsat.grade}th grade, so it is practice: National Merit uses the PSAT/NMSQT you take in 11th grade.</span></p>` : '';
   const gradeMsg = grade === 11 ? 'You are in the year that counts. Most students take the PSAT/NMSQT in October of 11th grade.' : grade === 12 ? 'The PSAT/NMSQT you took in 11th grade is the one the program used. An SAT or ACT score is part of the Finalist step.' : 'Entry is usually in junior year. Use this year to build skills: PSAT 10 and SAT practice both help.';
   const html = `<div class="page">${pageHead('Scholarship: National Merit', 'The PSAT/NMSQT is the qualifying test. The SAT still matters, because Finalists confirm their score with an SAT or ACT.')}
     <section class="card"><div class="card-head"><h2>Your Selection Index</h2></div>
       <div class="form-row nm-form"><div class="field"><label for="nm-rw">Reading &amp; Writing (PSAT scale)</label><input id="nm-rw" class="inp" inputmode="numeric" maxlength="3" value="${start.rw}" placeholder="160 to 760" data-in="nmCalc"></div>
       <div class="field"><label for="nm-math">Math (PSAT scale)</label><input id="nm-math" class="inp" inputmode="numeric" maxlength="3" value="${start.math}" placeholder="160 to 760" data-in="nmCalc"></div></div>
-      <p class="hint" style="margin-top:0" id="nm-src">${esc(start.src)}</p>
+      <p class="hint" style="margin-top:0" id="nm-src">${esc(start.src)}</p>${g10}
       <div class="nm-out"><div><span class="eyebrow">Selection Index</span><div class="big-n"><span id="nm-index">${r0.ok ? r0.idx : '-'}</span><small>of ${NM_MAX}</small></div></div>
         <div class="nm-meter"><div class="nm-scale" id="nm-scale" role="img" aria-label="Selection index scale from ${NM_MIN} to ${NM_MAX}"><i class="nm-fill" id="nm-fill" style="width:${r0.ok ? r0.fill : 0}%"></i><b class="nm-tick" style="left:${pos(NM_COMMENDED)}%" title="Class of 2026 Commended cutoff, ${NM_COMMENDED}"></b><b class="nm-tick" style="left:${pos(NM_TOP)}%" title="Highest Class of 2026 Semifinalist cutoff, ${NM_TOP}"></b>${tgt ? `<b class="nm-tick me" style="left:${pos(tgt)}%" title="Your target, ${tgt}"></b>` : ''}</div>
         <p class="legend-chart"><span><i class="lg-tick"></i> Class of 2026: Commended ${NM_COMMENDED}, top Semifinalist cutoff ${NM_TOP}</span></p></div></div>

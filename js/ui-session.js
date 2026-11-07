@@ -189,7 +189,7 @@ function questionScreen(S) {
   const left = leftPaneNeeded(q) ? `<section class="pane pane-l" aria-label="Passage">${passageHTML(q)}</section>` : '';
   const topFig = !left && (q.table || q.fig) ? `<div class="inline-media">${passageHTML(q)}</div>` : '';
   const sk = SKILL_BY_ID[q.s];
-  const fb = S.tutor && checked ? (() => { const ok = isOk(q, ans); return `<div class="feedback ${ok ? 'ok' : 'bad'}" role="status"><div class="fb-head">${ok ? ic('check', 20) + '<b>Correct</b>' : ic('x', 20) + '<b>Not quite</b>'}<span class="chips">${UI.badge(sk.name)}${UI.badge(['', 'Easy', 'Medium', 'Hard'][q.d], 'd' + q.d)}</span></div>
+  const fb = S.tutor && checked ? (() => { const ok = isOk(q, ans); return `<div class="feedback ${ok ? 'ok' : 'bad'}" role="status"><div class="fb-head">${ok ? ic('check', 20) + '<b>Correct</b>' : ic('x', 20) + '<b>Not quite</b>'}<span class="chips">${UI.badge(DOMAINS[sk.dom].name, 'dim')}${UI.badge(sk.name)}${UI.badge(['', 'Easy', 'Medium', 'Hard'][q.d], 'd' + q.d)}</span></div>
       <p class="fb-exp">${fmt(q.e)}</p><div class="fb-tip">${ic('bulb', 18)}<p><b>Skill tip: ${U.esc(sk.name)}.</b> ${U.esc(sk.tip)}</p></div></div>`; })() : '';
   const canCheck = answered(ans);
   const last = i === n - 1;

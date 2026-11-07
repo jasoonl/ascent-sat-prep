@@ -34,26 +34,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       }
     }
   };
-  await page.goto('http://localhost:8765/index.html'); await page.waitForSelector('#wform');
+  await page.goto('http://localhost:8767/index.html'); await page.waitForSelector('#wform');
   await page.fill('#w-name', 'Maya'); await page.fill('#w-testdate', '2027-03-13'); await page.click('#wform button[type=submit]');
   await page.waitForSelector('.page-head h1');
   // diagnostic (quick)
   await page.click('[data-act="startDiag"][data-arg="1"]'); await page.waitForSelector('.sess');
   await answerAll({ cs: 0.7, ii: 0.6, sec: 0.35, eoi: 0.6, alg: 0.9, adv: 0.5, psda: 0.7, geo: 0.4 }, 'diag');
   await page.waitForSelector('.results'); console.log('diag results ok'); await page.screenshot({ path: OUT + '/results-diag.png', fullPage: true });
-  await page.goto('http://localhost:8765/index.html#/home'); await page.waitForSelector('.page-head h1'); await page.screenshot({ path: OUT + '/home-after.png', fullPage: true });
-  for (const r of ['progress', 'plan', 'skills', 'mistakes', 'practice', 'tests', 'parent', 'settings']) { await page.goto('http://localhost:8765/index.html#/' + r); await page.waitForSelector('.page-head h1'); await page.screenshot({ path: `${OUT}/${r}.png`, fullPage: true }); }
+  await page.goto('http://localhost:8767/index.html#/home'); await page.waitForSelector('.page-head h1'); await page.screenshot({ path: OUT + '/home-after.png', fullPage: true });
+  for (const r of ['progress', 'plan', 'skills', 'mistakes', 'practice', 'tests', 'parent', 'settings']) { await page.goto('http://localhost:8767/index.html#/' + r); await page.waitForSelector('.page-head h1'); await page.screenshot({ path: `${OUT}/${r}.png`, fullPage: true }); }
   // practice tutor set
-  await page.goto('http://localhost:8765/index.html#/practice'); await page.click('[data-act="fixWeak"]'); await page.waitForSelector('.sess');
+  await page.goto('http://localhost:8767/index.html#/practice'); await page.click('[data-act="fixWeak"]'); await page.waitForSelector('.sess');
   await answerAll({ sec: 0.4 }, 'prac'); await page.waitForSelector('.results'); console.log('practice ok');
   // mini tests
   for (const k of ['rw1', 'math1']) {
-    await page.goto('http://localhost:8765/index.html#/tests'); await page.click(`[data-act="startTest"][data-arg="${k}"]`); await page.waitForSelector('[data-act="sessStart"]');
+    await page.goto('http://localhost:8767/index.html#/tests'); await page.click(`[data-act="startTest"][data-arg="${k}"]`); await page.waitForSelector('[data-act="sessStart"]');
     await page.screenshot({ path: `${OUT}/intro-${k}.png` });
     await answerAll({ cs: 0.8, ii: 0.8, sec: 0.7, eoi: 0.7, alg: 0.8, adv: 0.7, psda: 0.8, geo: 0.6 }, 'mini-' + k); await page.waitForSelector('.results'); console.log(k, 'ok');
   }
   // full test: fast path through all modules
-  await page.goto('http://localhost:8765/index.html#/tests'); await page.click('[data-act="startTest"][data-arg="full"]'); await page.waitForSelector('[data-act="sessStart"]');
+  await page.goto('http://localhost:8767/index.html#/tests'); await page.click('[data-act="startTest"][data-arg="full"]'); await page.waitForSelector('[data-act="sessStart"]');
   await answerAll({ cs: 0.8, ii: 0.8, sec: 0.7, eoi: 0.7, alg: 0.8, adv: 0.7, psda: 0.8, geo: 0.6 }, 'full'); await page.waitForSelector('.results');
   console.log('full score:', await page.textContent('.score-big')); await page.screenshot({ path: OUT + '/results-full.png', fullPage: true });
   const summary = await page.evaluate(() => { const p = Store.profile(); return { hist: p.hist.length, missed: Object.keys(p.missed).length, tests: p.tests.length, size: JSON.stringify(Store.get()).length }; });
