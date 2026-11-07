@@ -1,5 +1,5 @@
 global.window = global; const mem = {}; global.localStorage = { getItem: k => mem[k] || null, setItem: (k, v) => { mem[k] = v; } };
-['skills','bank-rw1','bank-rw2','bank-rw3','bank-math','gen','core'].forEach(f => require('../js/' + f + '.js'));
+['skills','bank-rw1','bank-rw2','bank-rw3','bank-math','gen','gen-math2','gen-rw','core'].forEach(f => require('../js/' + f + '.js'));
 const V = Engine.validateScore, t = (n, c) => console.log(c ? 'ok  ' : 'FAIL', n);
 t('sat valid sections', V({ exam: 'sat', date: '2026-03-14', rw: 640, math: 680 }).entry.total === 1320);
 t('total only', V({ exam: 'sat', date: '2026-03-14', total: 1250 }).ok);
@@ -12,11 +12,37 @@ t('future date rejected', !V({ exam: 'sat', date: '2099-01-01', rw: 600, math: 6
 t('derive other section', V({ exam: 'sat', date: '2025-10-15', total: 1300, rw: 650 }).entry.math === 650);
 t('index 700/700 = 210', Engine.selectionIndex(700, 700) === 210);
 t('index max 228, min 48', Engine.selectionIndex(760, 760) === 228 && Engine.selectionIndex(160, 160) === 48);
-t('psat 1400 -> sat equiv 1480', Engine.satEquivalent({ exam: 'psat', total: 1400, rw: 700, math: 700 }).total === 1480);
+t('psat and sat share one scale: psat 1400 = sat 1400', Engine.satEquivalent({ exam: 'psat', total: 1400, rw: 700, math: 700 }).total === 1400);
 t('sat 800 back to psat 760', Engine.fromSat(800, 'psat') === 760);
 const p = Store.create({ name: 'T' }); t('defaults', p.exam === 'sat' && Array.isArray(p.prior));
 p.prior.push(V({ exam: 'psat', date: '2025-10-15', rw: 640, math: 600 }).entry);
-const b = Engine.baseline(p); t('baseline sat-equivalent', b.rw === 680 && b.math === 640);
+const b = Engine.baseline(p); t('baseline uses the same numbers on the shared scale', b.rw === 640 && b.math === 600);
 t('level uses real score before practice', Engine.currentLevel(p).source === 'real');
 p.exam = 'psat'; const L = Engine.currentLevel(p); t('profile scale psat', L.rw === 640 && L.math === 600 && L.total === 1240);
 const nm = Engine.nmEstimate(p); t('nm index from real', nm.index === Engine.selectionIndex(640, 600) && nm.source === 'real');
+
+// ---- score report details ----
+const base = { exam: 'psat', date: '2025-10-15', rw: 660, math: 690 };
+let r = V(Object.assign({ grade: 10, ranges: { total: '1290-1410', rw: '620-700', math: '640-740' }, domains: { cs: 6, ii: 5, sec: 7, eoi: 6, alg: 6, adv: 5, psda: 6, geo: 4 } }, base));
+t('report details accepted', r.ok && r.entry.grade === 10 && r.entry.ranges.total[0] === 1290 && r.entry.ranges.rw[1] === 700 && r.entry.domains.geo === 4);
+t('range must contain the score', !V(Object.assign({ ranges: { rw: '670-720' } }, base)).ok);
+t('range with "to" and en dash parse', V(Object.assign({ ranges: { total: '1290 to 1410', math: '640–740' } }, base)).ok);
+t('range outside the scale rejected', !V(Object.assign({ ranges: { math: '700-800' } }, base)).ok);
+t('band outside 1-7 rejected', !V(Object.assign({ domains: { cs: 8 } }, base)).ok && !V(Object.assign({ domains: { cs: 0 } }, base)).ok);
+t('grade outside 8-12 rejected', !V(Object.assign({ grade: 7 }, base)).ok);
+t('report fields optional', V(base).ok && V(base).entry.ranges === undefined && V(base).entry.domains === undefined);
+t('band 1 starts at the exam minimum, band 7 ends at its maximum', Engine.bandRange('rw', 1, 'psat')[0] === 160 && Engine.bandRange('rw', 7, 'psat')[1] === 760 && Engine.bandRange('math', 7, 'sat')[1] === 800 && Engine.bandRange('math', 4, 'sat').join() === '470,540');
+const bm = Engine.benchmark(r.entry); t('grade 10 PSAT/NMSQT benchmarks 430 / 480', bm && bm.rw === 430 && bm.math === 480 && bm.rwMet && bm.mathMet);
+t('no benchmark claimed for SAT entries', Engine.benchmark({ exam: 'sat', grade: 11, rw: 600, math: 600 }) === null);
+const q = Store.create({ name: 'Prog' }); q.exam = 'psat';
+q.prior.push(V({ exam: 'psat', date: '2024-10-15', grade: 10, rw: 600, math: 620, ranges: { total: '1160-1280' }, domains: { cs: 5, ii: 5, sec: 6, eoi: 5, alg: 5, adv: 4, psda: 5, geo: 3 } }).entry);
+q.prior.push(r.entry);
+const pr = Engine.reportProgress(q);
+t('progress: +130 total, +60 RW, +70 Math since the previous test', pr.sincePrev.total === 130 && pr.sincePrev.rw === 60 && pr.sincePrev.math === 70 && pr.count === 2);
+t('progress: domain band changes', pr.domains.find(d => d.dom === 'geo').change === 1 && pr.domains.find(d => d.dom === 'sec').change === 1);
+t('progress: score ranges that do not overlap are recognized', pr.overlap === false);
+const rf = Engine.reportFocus(q); t('report focus: lowest band first', rf[0].dom === 'geo' && rf[0].band === 4 && !rf.some(x => x.band === 7));
+const st = Engine.skillStats(q); t('bands set priors before practice', st.circ.m < st.pct.m && st.circ.prior === 4 && Math.abs(st.circ.m - 0.55) < 1e-9);
+const day = Engine.buildDaily(q); t('daily plan leans toward the weakest report domain', day.qs.filter(x => SKILL_BY_ID[x.s].dom === 'geo').length >= 2);
+t('psat math weights differ from sat', domainShare('psda', 'psat') === 0.2 && domainShare('psda', 'sat') === 0.15);
+

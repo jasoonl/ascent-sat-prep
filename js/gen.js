@@ -79,7 +79,7 @@ T('lin1', 3, () => { const m = R.int(2, 7), n = R.int(2, 9), k = m * n;
   return numQ({ d: 3, q: `If ${m}(x + ${n}) = ${m}x + k has infinitely many solutions, what is the value of k?`, v: k, wrong: [n, m + n, k + m, k - n],
     e: `Distribute: ${m}x + ${k} = ${m}x + k. The equation is true for every x only if the constants match, so k = ${k}.` }, 0.5); });
 T('lin1', 3, () => { const a = R.int(2, 6), c = a + R.int(1, 4), x = R.int(2, 9), b = R.int(1, 12), d = (a - c) * x + b;
-  return numQ({ d: 3, q: `${a}x + ${b} = ${c}x + ${S(d)}. What is the value of x?`, v: x, wrong: [-x, x + 1, b - d, (b - d) / (a + c)],
+  return numQ({ d: 3, q: `${a}x + ${b} = ${c}x${sg(d)}. What is the value of x?`, v: x, wrong: [-x, x + 1, b - d, (b - d) / (a + c)],
     e: `Move the x-terms to one side: ${b} ${M} ${S(d)} = (${c} ${M} ${a})x, so ${b - d} = ${c - a}x and x = ${x}.` }); });
 
 T('lin2', 1, () => { const r = R.int(12, 60), f = R.int(15, 90), ctx = R.pick([['A plumber charges a service fee of', 'per hour of work', 'hours', 'C'], ['A gym charges a one-time sign-up fee of', 'per month', 'months', 'C'], ['A tutoring center charges a registration fee of', 'per session', 'sessions', 'C']]);
@@ -108,7 +108,7 @@ T('lin2', 2, () => { const c = R.pick([['A taxi’s fare F, in dollars, for a ri
 T('sys', 2, () => { let x, y, a, b, d, e; do { x = R.int(1, 8); y = R.int(1, 8); a = R.int(1, 5); b = R.nz(-4, 5); d = R.int(1, 5); e = R.nz(-4, 5); } while (a * e - b * d === 0 || a / d === b / e);
   const c = a * x + b * y, f = d * x + e * y, which = R.pick(['x', 'y', 'x + y']), v = which === 'x' ? x : which === 'y' ? y : x + y;
   const term = (c, v, first) => (first ? (c === 1 ? '' : c < 0 ? M + (c === -1 ? '' : -c) : c) : (c < 0 ? ` ${M} ` : ' + ') + (Math.abs(c) === 1 ? '' : Math.abs(c))) + v;
-  return numQ({ d: 2, q: `${term(a, 'x', true)}${term(b, 'y')} = ${c}\n${term(d, 'x', true)}${term(e, 'y')} = ${f}\n\nThe solution to the system of equations above is (x, y). What is the value of ${which}?`,
+  return numQ({ d: 2, q: `${term(a, 'x', true)}${term(b, 'y')} = ${S(c)}\n${term(d, 'x', true)}${term(e, 'y')} = ${S(f)}\n\nThe solution to the system of equations above is (x, y). What is the value of ${which}?`,
     v, wrong: [x, y, x + y, x - y, y + 1].filter(w => w !== v),
     e: `Solving the system (by elimination or substitution) gives x = ${x} and y = ${y}. Check in the first equation: ${a}(${x}) ${b < 0 ? M : '+'} ${Math.abs(b)}(${y}) = ${c} ✓. So ${which} = ${v}.` }); });
 T('sys', 2, () => { const pa = R.int(8, 20), pc = R.int(4, pa - 2), na = R.int(20, 80), nc = R.int(20, 80), ev = R.pick(['a school play', 'a community concert', 'a science fair']);
@@ -127,8 +127,8 @@ T('ineq', 2, () => { const a = R.int(2, 7), b = R.int(-10, 15), c = R.int(20, 60
   let ans = null; const test = neg ? (x => -a * x + b > c - 70) : (x => a * x + b <= c);
   for (let x = -200; x <= 200; x++) if (test(x)) ans = ans === null ? x : Math.max(ans, x);
   if (neg) { let mx = null; for (let x = -200; x <= 200; x++) if (test(x)) mx = x; ans = mx; }
-  return numQ({ d: 2, q: neg ? `What is the greatest integer value of x that satisfies ${M}${a}x + ${b} > ${c - 70}?` : `What is the greatest integer value of x that satisfies ${a}x ${b < 0 ? M : '+'} ${Math.abs(b)} ≤ ${c}?`, v: ans, wrong: [ans + 1, ans - 1, Math.round((c - b) / a)],
-    e: neg ? `Subtract ${b}: ${M}${a}x > ${c - 70 - b}. Dividing by ${M}${a} flips the sign: x < ${N((c - 70 - b) / -a)}. The greatest integer below that is ${ans}.` : `Subtract ${b}: ${a}x ≤ ${c - b}, so x ≤ ${N((c - b) / a)}. The greatest integer value is ${ans}.` }); });
+  return numQ({ d: 2, q: neg ? `What is the greatest integer value of x that satisfies ${M}${a}x${sg(b)} > ${S(c - 70)}?` : `What is the greatest integer value of x that satisfies ${a}x ${b < 0 ? M : '+'} ${Math.abs(b)} ≤ ${c}?`, v: ans, wrong: [ans + 1, ans - 1, Math.round((c - b) / a)],
+    e: neg ? `${b < 0 ? 'Add ' + (-b) : 'Subtract ' + b} on both sides: ${M}${a}x > ${S(c - 70 - b)}. Dividing by ${M}${a} flips the sign: x < ${N((c - 70 - b) / -a)}. The greatest integer below that is ${ans}.` : `${b < 0 ? 'Add ' + (-b) : 'Subtract ' + b} on both sides: ${a}x ≤ ${S(c - b)}, so x ≤ ${N((c - b) / a)}. The greatest integer value is ${ans}.` }); });
 T('ineq', 2, () => { const B = R.int(40, 120), p = R.int(2, 6), s = R.int(8, 25), n = Math.floor((B - s) / p);
   return numQ({ d: 2, q: `Jada has $${B} to spend on school supplies. She buys a backpack for $${s} and then spends the rest on notebooks that cost $${p} each. What is the maximum number of notebooks she can buy?`, v: n, wrong: [n + 1, n - 1, Math.floor(B / p)],
     e: `${p}n + ${s} ≤ ${B} → n ≤ ${N((B - s) / p)}. She can only buy whole notebooks, so the maximum is ${n}.` }); });
@@ -266,7 +266,7 @@ T('bi', 2, () => { const m = R.pick([2, 3, 4]), b = R.int(4, 20), x = R.int(3, 9
     e: `Predicted y = ${m}(${x}) + ${b} = ${pred}. Residual = ${y} ${M} ${pred} = ${S(res)}.` }, 0.5); });
 T('bi', 2, () => { const m = R.pick([1, 2, 3]), b = R.int(2, 8), xmax = 8, ymax = Math.ceil((m * xmax + b + 3) / 2) * 2, pts = [];
   for (let x = 1; x <= 8; x++) pts.push([x, Math.max(1, m * x + b + R.pick([-1.5, -1, -0.5, 0, 0.5, 1, 1.5]))]);
-  const eq = (mm, bb) => `y = ${mm}x + ${bb}`, a = eq(m, b), wr = [eq(m + 1, b), eq(Math.max(1, m - 1), b + 5), eq(m, b + 6), eq(m + 2, b - (b > 3 ? 3 : 0))];
+  const eq = (mm, bb) => `y = ${mm === 1 ? '' : mm}x + ${bb}`, a = eq(m, b), wr = [eq(m + 1, b), eq(Math.max(1, m - 1), b + 5), eq(m, b + 6), eq(m + 2, b - (b > 3 ? 3 : 0))];
   return mcQ({ d: 2, fig: svgScatter(m, b, xmax, ymax, pts), q: 'The scatterplot shows a data set with a line of best fit. Which of the following is the equation of the line of best fit?', a, w: wr,
     e: `Read the line’s y-intercept: it crosses the y-axis at ${b}. Then find the slope from two points on the line: the line rises ${m} unit${m > 1 ? 's' : ''} for each 1 unit of x. So the equation is ${a}.` }); });
 
@@ -276,7 +276,7 @@ T('prob', 1, () => { const r = R.int(3, 10), bl = R.int(3, 10), g = R.int(2, 10)
 T('prob', 2, () => { const a = R.int(15, 40), b = R.int(15, 40), c = R.int(15, 40), d = R.int(15, 40), ct = a + c, rt = a + b, gt = a + b + c + d;
   const rows = ['Freshmen', 'Sophomores'], cols = ['Biology', 'Chemistry'], cell = [[a, b], [c, d]];
   const givenCol = R.chance(0.5), ci = R.int(0, 1), ri = R.int(0, 1);
-  const colTot = [a + c, b + d], rowTot = [a + b, c + d], q = givenCol ? `If a student enrolled in ${cols[ci]} is selected at random, what is the probability that the student is a ${rows[ri].slice(0, -1).toLowerCase()}?` : `If a ${rows[ri].slice(0, -1).toLowerCase()} is selected at random, what is the probability that the student is enrolled in ${cols[ci]}?`;
+  const colTot = [a + c, b + d], rowTot = [a + b, c + d], q = givenCol ? `If a student enrolled in ${cols[ci]} is selected at random, what is the probability that the student is a ${['freshman', 'sophomore'][ri]}?` : `If a ${['freshman', 'sophomore'][ri]} is selected at random, what is the probability that the student is enrolled in ${cols[ci]}?`;
   const num = cell[ri][ci], den = givenCol ? colTot[ci] : rowTot[ri], f = (n, dd) => `${n}/${dd}`;
   const alt = givenCol ? rowTot[ri] : colTot[ci];
   return mcQ({ d: 2, table: { head: ['', ...cols, 'Total'], rows: [[rows[0], a, b, a + b], [rows[1], c, d, c + d], ['Total', a + c, b + d, gt]] }, q: `The table shows the numbers of freshmen and sophomores enrolled in two science electives. ${q}`,
@@ -385,6 +385,8 @@ T('circ', 1, () => { const h = R.nz(-8, 8), k = R.nz(-8, 8), r = R.int(2, 9), c 
 /* ---------- public API ---------- */
 let SEQ = 0;
 window.Gen = {
+  add: T,                                                       // more template files (gen-math2.js, gen-rw.js) register here
+  h: { R, S, M, N, fr, FR, L, P2, co, sg, gcd, numQ, mcQ, wrongs, svgTri },
   has: skill => !!G[skill],
   skills: () => Object.keys(G),
   count: skill => (G[skill] || []).length,

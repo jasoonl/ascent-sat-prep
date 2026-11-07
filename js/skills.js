@@ -11,6 +11,18 @@ window.DOMAINS = {
   geo:  { id: 'geo',  sec: 'math', name: 'Geometry and Trigonometry',    short: 'Geometry & Trig',   w: 0.15 }
 };
 
+/* Official content domains and how many questions each gets per test (College Board test specifications).
+   The SAT, PSAT/NMSQT and PSAT 10 share the same eight domains and skills. Reading and Writing is weighted the
+   same on all of them; Math differs: the PSATs give more weight to data analysis and less to Advanced Math and geometry. */
+const RW_SPEC = { cs: [0.28, '13 to 15'], ii: [0.26, '12 to 14'], sec: [0.26, '11 to 15'], eoi: [0.20, '8 to 12'] };
+window.DOMAIN_SPEC = {
+  sat:  Object.assign({ alg: [0.35, '13 to 15'], adv: [0.35, '13 to 15'], psda: [0.15, '5 to 7'], geo: [0.15, '5 to 7'] }, RW_SPEC),
+  psat: Object.assign({ alg: [0.35, '13 to 15'], adv: [0.325, '12 to 14'], psda: [0.20, '7 to 9'], geo: [0.125, '4 to 6'] }, RW_SPEC)
+};
+DOMAIN_SPEC.psat10 = DOMAIN_SPEC.psat; DOMAIN_SPEC.psat89 = DOMAIN_SPEC.psat;
+/* Share of a section for a domain on the student's exam (falls back to the SAT). */
+window.domainShare = (dom, exam) => (DOMAIN_SPEC[exam] || DOMAIN_SPEC.sat)[dom][0];
+
 window.SKILLS = [
   // ---- Reading & Writing ----
   { id: 'wic', dom: 'cs', sec: 'rw', name: 'Words in Context', w: 0.50,

@@ -12,7 +12,12 @@ A free, private, no-backend SAT practice site, with PSAT/NMSQT practice and Nati
 - Real score history: enter results from the SAT, PSAT/NMSQT, PSAT 10 or PSAT 8/9. They set the starting difficulty, fill the gap-to-goal before practice data exists, and appear on the progress chart
 - Exam focus: SAT (200-800 sections, 400-1600 total) or PSAT/NMSQT / PSAT 10 (160-760 sections, 320-1520 total), with a slightly easier practice mix on the PSAT scale
 - Scholarship page: National Merit Selection Index calculator, state cutoff target, and a plain-language guide to the program (figures sourced from nationalmerit.org; cutoffs are unofficial reports and change every year)
-- ~230 hand-written original questions + 60 procedural math generators (unlimited variants)
+- ~230 hand-written original questions, plus generators that build new questions on demand:
+  - Math: 121 templates across all 17 math skills (over 180,000 distinct questions in a 40,000-per-skill sample)
+  - Reading and Writing: 18 templates for Boundaries; Form, Structure, and Sense; Transitions; Rhetorical Synthesis; quantitative Command of Evidence (over 138,000 distinct in the same sample)
+  - Generated questions are computed, not stored, so the site stays small. Words in Context, Central Ideas, Inferences, Text Structure and Cross-Text questions are hand-written only.
+- Skills grouped under the eight official content domains, shared by the SAT, PSAT/NMSQT and PSAT 10, with each exam's question counts
+- Real score history with the details printed on College Board score reports: score ranges, grade, and the 1 to 7 knowledge and skills bands. Shows improvement between tests, PSAT/NMSQT benchmarks, and starts practice from the weakest bands
 - Import your own question packs (JSON) or generate extra questions with your own AI key (optional)
 - Optional cloud accounts (email and password, or an emailed sign-in link), one per student, so progress follows them between devices. Off until you set it up: see [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
 - Light/dark theme, keyboard accessible, works on phones, installable/offline after first load
@@ -30,9 +35,9 @@ The site is plain static files, so it needs **no server of its own**. It is host
 Progress is stored per browser/device. Use Settings → *Download backup* to move it between devices.
 
 ## Adding questions
-Edit `js/bank-rw*.js` / `js/bank-math.js` (rows: `[skill, difficulty, passage, question, correct, [3 wrong], explanation]`, correct answer first), or use Settings → *Import question pack*. Run `node tests/gen-check.js` after changing generators, and `node tests/scores-check.js` after changing score scales.
+Edit `js/bank-rw*.js` / `js/bank-math.js` (rows: `[skill, difficulty, passage, question, correct, [3 wrong], explanation]`, correct answer first), or use Settings → *Import question pack*. Run `node tests/gen-check.js`, `node tests/rw-gen-check.js` and `node tests/bank-check.js` after changing questions or generators, and `node tests/scores-check.js` after changing score scales.
 
 ## Notes on scoring
-PSAT scores are converted to an approximate SAT equivalent by adding 40 points per section (80 for PSAT 8/9). These are rough guides, not official concordance tables. The Selection Index is (2 x Reading & Writing + Math) / 10 on PSAT-scale section scores; your official index is on your PSAT/NMSQT score report.
+The SAT, PSAT/NMSQT, PSAT 10 and PSAT 8/9 report scores on one shared vertical scale, so a PSAT 1100 means the same as an SAT 1100; the PSATs simply top out lower (760 per section for the PSAT/NMSQT and PSAT 10, 720 for PSAT 8/9). Earlier versions of this app added 40 points per section when converting, which was wrong and has been removed. Domain weights follow the College Board test specifications: Reading and Writing is the same on every test; on Math the SAT weights Algebra and Advanced Math 35% each and the other two domains 15% each, while the PSAT/NMSQT and PSAT 10 use 35%, 32.5%, 20% and 12.5%. The Selection Index is (2 x Reading & Writing + Math) / 10 on PSAT-scale section scores; your official index is on your PSAT/NMSQT score report.
 
 SAT is a registered trademark of the College Board, which is not affiliated with this project. All questions are original.

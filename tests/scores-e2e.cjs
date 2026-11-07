@@ -36,7 +36,7 @@ const ok = (n, c) => { console.log(c ? 'ok  ' : 'FAIL', n); if (!c) process.exit
   await p.screenshot({ path: O + '/scholarship.png', fullPage: true });
   await p.evaluate(() => { location.hash = '#/settings'; }); await p.waitForSelector('[data-act="setExamAct"]');
   const t0 = await p.evaluate(() => Store.profile().target); await p.click('[data-act="setExamAct"][data-arg="sat"]'); await p.waitForTimeout(250);
-  const t1 = await p.evaluate(() => Store.profile().target); ok(`target converts on exam switch (${t0} to ${t1})`, t1 === t0 + 80);
+  const t1 = await p.evaluate(() => Store.profile().target); ok(`target keeps its value on exam switch, since the scales are shared (${t0} to ${t1})`, t1 === t0);
   await p.click('[data-act="setExamAct"][data-arg="psat"]'); await p.waitForTimeout(200);
   await p.evaluate(() => UI.startTest('full')); await p.click('[data-act="sessStart"]'); await p.waitForSelector('.sess');
   // answer every question correctly in all four modules through the session API, then finish

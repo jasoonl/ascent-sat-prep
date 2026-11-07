@@ -1,6 +1,6 @@
 global.window = global;
 const mem = {}; global.localStorage = { getItem: k => mem[k] || null, setItem: (k, v) => { mem[k] = v; } };
-['skills','bank-rw1','bank-rw2','bank-math','gen','core'].forEach(f => require('../js/' + f + '.js'));
+['skills','bank-rw1','bank-rw2','bank-rw3','bank-math','gen','gen-math2','gen-rw','core'].forEach(f => require('../js/' + f + '.js'));
 const p = Store.create({ name: 'Test' });
 console.log('static bank', Bank.total());
 // simulate a student: strong at algebra, weak at grammar

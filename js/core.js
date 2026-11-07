@@ -58,12 +58,13 @@ function gradeGrid(input, answer) {
 
 /* ================= exams, score scales, prior scores ================= */
 /* Digital SAT: sections 200-800 (total 400-1600). Digital PSAT/NMSQT and PSAT 10: sections 160-760 (total 320-1520).
-   PSAT 8/9: sections 120-720 (total 240-1440). `offset` is the approximate SAT-equivalent shift per section. */
+   PSAT 8/9: sections 120-720 (total 240-1440). College Board reports all of these on one shared vertical scale, so a
+   PSAT 1100 means the same as an SAT 1100; the PSATs just top out lower. `offset` stays 0 for every exam. */
 const EXAMS = {
   sat:    { id: 'sat',    name: 'SAT',        min: 400, max: 1600, secMin: 200, secMax: 800, offset: 0 },
-  psat:   { id: 'psat',   name: 'PSAT/NMSQT', min: 320, max: 1520, secMin: 160, secMax: 760, offset: 40 },
-  psat10: { id: 'psat10', name: 'PSAT 10',    min: 320, max: 1520, secMin: 160, secMax: 760, offset: 40 },
-  psat89: { id: 'psat89', name: 'PSAT 8/9',   min: 240, max: 1440, secMin: 120, secMax: 720, offset: 80 }
+  psat:   { id: 'psat',   name: 'PSAT/NMSQT', min: 320, max: 1520, secMin: 160, secMax: 760, offset: 0 },
+  psat10: { id: 'psat10', name: 'PSAT 10',    min: 320, max: 1520, secMin: 160, secMax: 760, offset: 0 },
+  psat89: { id: 'psat89', name: 'PSAT 8/9',   min: 240, max: 1440, secMin: 120, secMax: 720, offset: 0 }
 };
 const examOf = p => EXAMS[(p && p.exam) || 'sat'] || EXAMS.sat;
 const toSat = (score, exam) => U.clamp(score + EXAMS[exam].offset, 200, 800);
@@ -85,8 +86,35 @@ function validateScore(o) {
     else if (total !== null && (rw !== null || math !== null)) { const other = total - (rw !== null ? rw : math), k = rw !== null ? 'math' : 'rw'; if (other < ex.secMin || other > ex.secMax) err.total = 'Those numbers do not add up. Check the total and section scores.'; else if (k === 'math') math = other; else rw = other; }
     else if (total === null) err.total = 'Enter the total score, or both section scores.';
   }
+  // optional details printed on the score report: grade, score ranges and the 1 to 7 domain bands
+  const entry = { id: o.id || U.uid(), exam: o.exam, date: o.date, total, rw, math };
+  if (o.grade != null && o.grade !== '') { const g = Number(o.grade); if (!Number.isInteger(g) || g < 8 || g > 12) err.grade = 'Grade is 8 to 12.'; else entry.grade = g; }
+  const rg = o.ranges || {}, ranges = {};
+  [['total', ex.min, ex.max, total, 'Total'], ['rw', ex.secMin, ex.secMax, rw, 'Reading & Writing'], ['math', ex.secMin, ex.secMax, math, 'Math']].forEach(([k, lo, hi, val, label]) => {
+    const raw = String(rg[k] == null ? '' : rg[k]).trim(); if (!raw) return;
+    const m = raw.match(/^(\d{3,4})\s*(?:-|–|—|to)\s*(\d{3,4})$/);
+    if (!m) { err.ranges = `${label} range should look like 1370-1450.`; return; }
+    const a = +m[1], b = +m[2];
+    if (a > b || a % 10 || b % 10 || a < lo || b > hi) { err.ranges = `${label} range must be two multiples of 10 from ${lo} to ${hi}, low number first.`; return; }
+    if (val != null && (val < a || val > b)) { err.ranges = `${label} range ${a}-${b} should include the score ${val}.`; return; }
+    ranges[k] = [a, b];
+  });
+  if (Object.keys(ranges).length) entry.ranges = ranges;
+  const dm = o.domains || {}, domains = {};
+  Object.keys(DOMAINS).forEach(d => { const v = dm[d]; if (v == null || v === '') return; const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 7) err.domains = 'Each band is a number from 1 to 7.'; else domains[d] = n; });
+  if (Object.keys(domains).length) entry.domains = domains;
   if (Object.keys(err).length) return { ok: false, err };
-  return { ok: true, err, entry: { id: o.id || U.uid(), exam: o.exam, date: o.date, total, rw, math } };
+  return { ok: true, err, entry };
+}
+/* Score bands used on SAT Suite score reports for each content domain (performance bands 1 to 7). The lowest band
+   starts at the exam's section minimum and the top band ends at its section maximum. */
+const BANDS = { rw: [[0, 360], [370, 410], [420, 480], [490, 540], [550, 600], [610, 670], [680, 9999]], math: [[0, 360], [370, 410], [420, 460], [470, 540], [550, 600], [610, 670], [680, 9999]] };
+function bandRange(sec, band, exam) { const e = EXAMS[exam] || EXAMS.sat, r = BANDS[sec][band - 1]; return [Math.max(r[0], e.secMin), Math.min(r[1], e.secMax)]; }
+/* College and career readiness benchmarks, PSAT/NMSQT only (grade 10: 430 / 480, grade 11: 460 / 510). */
+const BENCH = { psat: { 10: { rw: 430, math: 480 }, 11: { rw: 460, math: 510 } } };
+function benchmark(e) {
+  const b = BENCH[e.exam] && BENCH[e.exam][e.grade]; if (!b) return null;
+  return { grade: e.grade, rw: b.rw, math: b.math, rwMet: e.rw != null ? e.rw >= b.rw : null, mathMet: e.math != null ? e.math >= b.math : null };
 }
 const priorScores = p => ((p && p.prior) || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 /* A prior score converted to the SAT scale ({rw, math, total}); total-only scores split evenly. */
@@ -98,6 +126,23 @@ function satEquivalent(e) {
 function baseline(p) { const e = priorScores(p)[0]; if (!e) return null; return Object.assign({ entry: e }, satEquivalent(e)); }
 /* Same entry converted onto the profile's own scale (for charts and gap-to-goal). */
 function inProfileScale(p, e) { const sat = satEquivalent(e), x = examOf(p).id; const rw = fromSat(sat.rw, x), math = fromSat(sat.math, x); return { rw, math, total: rw + math }; }
+/* Change between real scores, on the profile's scale. latest vs previous, and latest vs first. */
+function reportProgress(p) {
+  const list = priorScores(p).slice().reverse(); if (!list.length) return null;   // oldest first
+  const conv = e => Object.assign({ entry: e }, inProfileScale(p, e)), all = list.map(conv), latest = all[all.length - 1], prev = all.length > 1 ? all[all.length - 2] : null, first = all[0];
+  const delta = (a, b) => b ? { total: a.total - b.total, rw: a.entry.rw != null && b.entry.rw != null ? a.rw - b.rw : null, math: a.entry.math != null && b.entry.math != null ? a.math - b.math : null } : null;
+  const doms = [];
+  if (prev && latest.entry.domains && prev.entry.domains) Object.keys(DOMAINS).forEach(d => { const a = latest.entry.domains[d], b = prev.entry.domains[d]; if (a && b) doms.push({ dom: d, from: b, to: a, change: a - b }); });
+  const rl = latest.entry.ranges && latest.entry.ranges.total, rp = prev && prev.entry.ranges && prev.entry.ranges.total;
+  const overlap = rl && rp ? rl[0] <= rp[1] && rp[0] <= rl[1] : null;
+  return { latest, prev, first, count: all.length, sincePrev: delta(latest, prev), sinceFirst: all.length > 2 ? delta(latest, first) : null, domains: doms, overlap, best: all.reduce((m, x) => (x.total > m.total ? x : m)) };
+}
+/* Domains to work on from the latest score report: lowest band first, ties broken by how much of the test they are. */
+function reportFocus(p) {
+  const e = priorScores(p).find(x => x.domains && Object.keys(x.domains).length); if (!e) return [];
+  const ex = examOf(p).id;
+  return Object.entries(e.domains).filter(([, b]) => b < 7).map(([dom, band]) => ({ dom, band, entry: e })).sort((a, b) => a.band - b.band || domainShare(b.dom, ex) - domainShare(a.dom, ex));
+}
 /* PSAT-scale sections and Selection Index from practice (if enough data) or the latest real score. */
 function nmEstimate(p) {
   const est = estimateSat(p); let rw, math, source;
@@ -207,8 +252,12 @@ const Bank = {
 /* ================= analytics: mastery (Elo-style per skill) ================= */
 const statsCache = new WeakMap();
 /* Per-skill mastery: recency-weighted, difficulty-aware accuracy shrunk toward 50% (prior of 1 right + 1 wrong). */
+/* Expected accuracy for a skill before practice, from the latest score report's domain band (1 to 7). */
+const BAND_MEAN = [0, 0.25, 0.35, 0.45, 0.55, 0.65, 0.78, 0.9];
+function latestBands(prof) { const e = priorScores(prof).find(x => x.domains && Object.keys(x.domains).length); return e ? e.domains : null; }
 function skillStats(prof) {
-  const cached = statsCache.get(prof); if (cached && cached.n === prof.hist.length) return cached.v;
+  const bands = latestBands(prof), sig = prof.hist.length + '|' + (bands ? JSON.stringify(bands) : '');
+  const cached = statsCache.get(prof); if (cached && cached.sig === sig) return cached.v;
   const st = {}; SKILLS.forEach(s => { st[s.id] = { id: s.id, n: 0, ok: 0, ms: [], last: 0, byD: { 1: [0, 0], 2: [0, 0], 3: [0, 0] }, items: [], recent: [] }; });
   for (const h of prof.hist) {
     const x = st[h.s]; if (!x) continue;
@@ -220,14 +269,15 @@ function skillStats(prof) {
   for (const k in st) {
     const x = st[k], arr = x.items; let num = 0, den = 0;
     for (let i = 0; i < arr.length; i++) { const dec = Math.pow(0.92, arr.length - 1 - i), [ok, d] = arr[i], w = dec * (ok ? [0.8, 1, 1.2][d - 1] : [1.2, 1, 0.8][d - 1]); num += w * ok; den += w; }
-    x.m = (num + 1) / (den + 2); x.acc = x.n ? x.ok / x.n : null; x.conf = Math.min(1, x.n / 8); delete x.items;
+    const b = bands && bands[SKILL_BY_ID[k].dom], mu = b ? BAND_MEAN[b] : 0.5; x.prior = b || null;
+    x.m = (num + 2 * mu) / (den + 2); x.acc = x.n ? x.ok / x.n : null; x.conf = Math.min(1, x.n / 8); delete x.items;
   }
-  statsCache.set(prof, { n: prof.hist.length, v: st });
+  statsCache.set(prof, { sig, v: st });
   return st;
 }
 function sectionEstimate(prof, sec) {
   const st = skillStats(prof); let num = 0, den = 0, n = 0;
-  for (const s of SKILLS) if (s.sec === sec) { const wgt = s.w * DOMAINS[s.dom].w; num += wgt * st[s.id].m; den += wgt; n += st[s.id].n; }
+  for (const s of SKILLS) if (s.sec === sec) { const wgt = s.w * domainShare(s.dom, examOf(prof).id); num += wgt * st[s.id].m; den += wgt; n += st[s.id].n; }
   const p = den ? num / den : 0.5, score = Math.round((200 + 600 * U.clamp((p - 0.25) / 0.7, 0, 1)) / 10) * 10;
   return { score, p, n };
 }
@@ -252,7 +302,7 @@ const TARGET_MS = { rw: 71000, math: 95000 };
 function analyze(prof) {
   const st = skillStats(prof), list = SKILLS.map(s => Object.assign({ skill: s }, st[s.id]));
   const answered = list.filter(x => x.n >= 1);
-  const prio = x => (1 - x.m) * (0.5 + DOMAINS[x.skill.dom].w + x.skill.w * 0.3) * (0.5 + 0.5 * x.conf);
+  const ex = examOf(prof).id, prio = x => (1 - x.m) * (0.5 + domainShare(x.skill.dom, ex) + x.skill.w * 0.3) * (0.5 + 0.5 * x.conf);
   const ranked = answered.slice().sort((a, b) => prio(b) - prio(a));
   const focus = ranked.filter(x => x.m < 0.62).slice(0, 3);
   const unassessed = list.filter(x => x.n < 1);
@@ -348,11 +398,18 @@ function pickQuestions(prof, weights, n, diff, used) {
 /* ---------- full-length test construction ---------- */
 const MOD_COUNT = { rw: 27, math: 22 };
 const ALLOC = { rw: { cs: 8, ii: 7, sec: 7, eoi: 5 }, math: { alg: 8, adv: 7, psda: 4, geo: 3 } };
+/* Questions per domain in one module, from the exam's official domain shares (largest remainder rounding). */
+function allocFor(prof, sec) {
+  const ex = examOf(prof).id, n = sec === 'rw' ? 27 : 22, doms = Object.keys(ALLOC[sec]);
+  const raw = doms.map(d => ({ d, v: domainShare(d, ex) * n })), out = {}; raw.forEach(x => { out[x.d] = Math.floor(x.v); });
+  let left = n - Object.values(out).reduce((a, b) => a + b, 0); raw.sort((a, b) => (b.v % 1) - (a.v % 1)).forEach(x => { if (left > 0) { out[x.d]++; left--; } });
+  return out;
+}
 const MIX = { mixed: [0.3, 0.5, 0.2], easy: [0.5, 0.4, 0.1], hard: [0.15, 0.35, 0.5] };
 const MIXP = { mixed: [0.4, 0.45, 0.15], easy: [0.55, 0.38, 0.07], hard: [0.2, 0.4, 0.4] };   // PSAT is a little easier
 function buildModule(prof, sec, level, count, used) {
   count = count || MOD_COUNT[sec]; used = used || newUsed();
-  const alloc = ALLOC[sec], scale = count / Object.values(alloc).reduce((a, b) => a + b, 0), qs = [];
+  const alloc = allocFor(prof, sec), scale = count / Object.values(alloc).reduce((a, b) => a + b, 0), qs = [];
   for (const dom in alloc) {
     const k = Math.max(1, Math.round(alloc[dom] * scale)), sks = SKILLS.filter(s => s.dom === dom).map(s => ({ id: s.id, w: s.w }));
     for (let i = 0; i < k; i++) {
@@ -396,7 +453,8 @@ function buildDaily(prof) {
   const due = dueMissed(prof).slice(0, Math.round(n * 0.25));
   const qs = due.map(m => { used.ids.add(m.q.id); return Object.assign({}, m.q, { fromReview: true }); });
   const an = analyze(prof);
-  const focus = an.focus.length ? an.focus.map((x, i) => ({ id: x.skill.id, w: 3 - i })) : [];
+  const rep = an.focus.length ? [] : reportFocus(prof).slice(0, 3);
+  const focus = an.focus.length ? an.focus.map((x, i) => ({ id: x.skill.id, w: 3 - i })) : [].concat(...rep.map((f, i) => SKILLS.filter(s => s.dom === f.dom).map(s => ({ id: s.id, w: (3 - i) * s.w * 2 }))));
   const unass = an.unassessed.slice(0, 4).map(x => ({ id: x.skill.id, w: 1 }));
   const rest = n - qs.length;
   const wk = focus.concat(unass); const allw = SKILLS.map(s => ({ id: s.id, w: 0.25 }));
@@ -414,7 +472,7 @@ function weekPlan(prof) {
 
 window.U = U; window.fmt = fmt; window.gradeGrid = gradeGrid; window.parseGrid = parseGrid;
 window.Store = Store; window.Bank = Bank;
-window.Engine = { EXAMS, examOf, toSat, fromSat, selectionIndex, validateScore, priorScores, satEquivalent, baseline, inProfileScale, nmEstimate, currentLevel, estimateSat,
+window.Engine = { EXAMS, examOf, BANDS, bandRange, benchmark, reportProgress, reportFocus, toSat, fromSat, selectionIndex, validateScore, priorScores, satEquivalent, baseline, inProfileScale, nmEstimate, currentLevel, estimateSat,
   toScale: (p, satScore) => fromSat(satScore, examOf(p).id), skillStats, estimate, sectionEstimate, analyze, reasonFor, streak, activityDays, todayStats, pickQuestions, buildModule, newUsed, weightedPct, scoreSection,
   ROUTE_UP, MOD_COUNT, TARGET_MS, recordAnswer, dueMissed, buildDaily, weekPlan, targetDiff, BOX_DAYS };
 }());
